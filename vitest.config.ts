@@ -5,6 +5,8 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     environment: 'node',
     reporters: 'default',
+    // vi.stubEnv changes are rolled back after every test.
+    unstubEnvs: true,
     coverage: {
       enabled: false,
     },

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Install
+        run: yarn install --frozen-lockfile
+
+      - name: Generated files are up to date
+        run: |
+          node scripts/generate-build-info.mjs
+          node scripts/build-skills-index.mjs
+          git diff --exit-code -- src/generated server.json public
+
+      - name: Format (code)
+        run: npx prettier --check src tests scripts/generate-build-info.mjs
+
+      - name: Lint
+        run: yarn lint
+
+      # tsc in the build is the typecheck.
+      - name: Build
+        run: yarn build
+
+      - name: Test
+        run: yarn test
+
+      - name: Production dependency audit
+        run: yarn audit --groups dependencies --level high || echo "::warning::yarn audit reported high-severity advisories"

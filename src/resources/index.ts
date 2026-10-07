@@ -1,299 +1,145 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceNotFoundError, ResourceTemplate } from '@modelcontextprotocol/server';
 import { logger } from '../utils/logger.js';
+import {
+  AUTH,
+  CORE_VERSION_VERIFIED,
+  NATIVE_CHAINS,
+  SMART_BRIDGE,
+  WEBHOOK,
+} from '../facts/payram.js';
+import { buildSetupPlan, renderSetupPlan } from '../tools/guides/setupPlan.js';
+import { OPS_TASKS, getRecipe, renderRecipe } from '../tools/guides/opsPlaybook.js';
+import { RUNBOOK_TASKS, getRunbook, renderRunbook } from '../tools/guides/runbooks.js';
 
 /**
- * Register resources for the Payram MCP server.
- * Resources provide static documentation and reference content.
+ * Resources: read-only reference documents. Content is rendered from the
+ * same sources the tools use, so the two cannot drift apart.
  */
-export const registerResources = (server: McpServer) => {
-  logger.info('Registering resources...');
 
-  // Resource 1: Setup Guide
+const MARKDOWN = 'text/markdown';
+const STATIC_HINT = { ttlMs: 300_000, cacheScope: 'public' as const };
+
+const API_REFERENCE = `# PayRam API essentials (core ${CORE_VERSION_VERIFIED})
+
+Base URL: the same origin as the dashboard, e.g. \`https://pay.example.com/api/v1\` (no :8080).
+
+## Credentials
+- ${AUTH.apiKey}
+- ${AUTH.jwt}
+- ${AUTH.refresh}
+- ${AUTH.public}
+- Send one credential per request: with both headers the JWT wins.
+
+## Create a payment — \`POST /api/v1/payment\` (API-Key)
+Request: \`{"customerID": "cust-123", "customerEmail": "buyer@example.com", "amountInUSD": 25}\` (all required).
+Response: \`{"url": "https://pay.example.com/payments?reference_id=…", "reference_id": "…", "host": "…"}\` → send \`url\` to the customer.
+Creating a payment cancels that customer's other open payments. HTTP 500 \`{"code":5}\`: the project needs exactly one linked deposit wallet.
+
+## Check a payment — \`GET /api/v1/payment/reference/{reference_id}\` (no credential; the reference is the capability)
+Returns \`paymentState\` (OPEN, PARTIALLY_FILLED, FILLED, OVER_FILLED, CANCELLED), \`amountInUSD\`, \`filledAmountInUSD\` (decimal strings), confirmations. Unknown references return 401.
+
+## Webhooks (PayRam → your server)
+- \`POST\` with JSON body in snake_case: \`reference_id, invoice_id, customer_id, status, amount, currency, filled_amount, filled_amount_in_usd, timestamp, payment_info[], confirmation_current, confirmation_required\`. ${WEBHOOK.amounts}
+- Headers: \`${WEBHOOK.signature}\` and legacy \`${WEBHOOK.legacyHeader}\`. The key is ${WEBHOOK.signingKey}. ${WEBHOOK.verify}
+- ${WEBHOOK.cancelled}
+- ${WEBHOOK.ping}
+- Retries: ${WEBHOOK.retries}.
+
+## Payouts — \`POST /api/v1/withdrawal/merchant\` (API-Key; creating payouts is a human decision)
+Body: \`{"customerID", "email", "blockchainCode", "currencyCode", "amount", "toAddress"}\` plus header \`Idempotency-Key\` (a duplicate within 5 minutes returns 409).
+\`blockchainCode\` is the UPPERCASE chain code. Valid pairs: ${NATIVE_CHAINS.filter(
+  (c) => c.payouts,
+)
+  .map((c) => `${c.code} → ${c.tokens}`)
+  .join(' · ')}. BTC payouts are not supported. Returns 201.
+
+## Chains
+Native: ${NATIVE_CHAINS.map((c) => `${c.code} (${c.tokens})`).join('; ')}.
+Smart Bridge: ${SMART_BRIDGE.rails.map((r) => r.origin).join(', ')} — settle as ${SMART_BRIDGE.settlesAs}.
+
+## Operations
+Health, workers, nodes, sweeps, payouts, webhooks: see \`payram://ops/playbook\` (every call, credential and interpretation).
+`;
+
+export const registerResources = (server: McpServer) => {
+  logger.debug('Registering resources...');
+
   server.registerResource(
-    'Payram Setup Guide',
+    'setup-guide',
     'payram://docs/setup-guide',
     {
-      description: 'Complete guide for setting up Payram in your project',
-      mimeType: 'text/markdown',
+      title: 'PayRam setup guide',
+      description:
+        'Default headless install plan (testnet, USDC on Base). Personalise with payram_setup_plan.',
+      mimeType: MARKDOWN,
+      cacheHint: STATIC_HINT,
     },
-    async () => {
-      return {
-        contents: [
-          {
-            uri: 'payram://docs/setup-guide',
-            mimeType: 'text/markdown',
-            text: `# Payram Setup Guide
-
-## Quick Start
-
-Payram is a self-hosted crypto payment gateway that accepts USDT, USDC, Bitcoin, and ETH across multiple blockchains.
-
-### Prerequisites
-
-- A deployed Payram server instance
-- Payram API key from your dashboard
-- Project with a web framework (Express, Next.js, FastAPI, Laravel, Gin, or Spring Boot)
-
-### Step 1: Configure Environment Variables
-
-Create a \`.env\` file in your project root:
-
-\`\`\`bash
-# Payram REST base URL (include protocol)
-PAYRAM_BASE_URL=https://your-payram-server.example
-
-# Payram API key (see Payram dashboard)
-PAYRAM_API_KEY=pk_test_your_api_key_here
-\`\`\`
-
-### Step 2: Test Connection
-
-Use the \`test_payram_connection\` tool to verify your configuration:
-- It will check connectivity to your Payram server
-- Validates your API key
-- Returns server version info
-
-### Step 3: Generate Integration Code
-
-Based on your framework, use the appropriate tools:
-- **Express**: \`snippet_express_payment_route\`
-- **Next.js**: \`snippet_nextjs_payment_route\`
-- **FastAPI**: \`snippet_fastapi_payment_route\`
-- **Laravel**: \`snippet_laravel_payment_route\`
-- **Gin**: \`snippet_go_payment_handler\`
-- **Spring Boot**: \`snippet_spring_payment_controller\`
-
-Or use \`scaffold_payram_app\` to generate a complete starter application.
-
-### Step 4: Implement Webhooks
-
-Generate webhook handlers using \`generate_webhook_handler\` to receive real-time payment confirmations.
-
-### Step 5: Test Your Integration
-
-1. Create a test payment
-2. Complete the payment flow
-3. Verify webhook delivery
-4. Check payment status
-
-## Architecture
-
-- **Zero-Key-Exposure Security**: Deposit wallets are smart contracts with hardcoded cold wallet destinations. The only key on the server is the hot wallet (encrypted, gas-only — cannot access deposits). The master wallet stays offline. A server breach cannot lead to theft of deposit funds.
-- **Smart Contract Sweeps**: Funds automatically swept to cold wallets via immutable contract logic
-- **Multi-chain Support**: Ethereum, Base, Polygon, Tron, Bitcoin
-- **Non-custodial**: You control your funds at all times
-
-## Next Steps
-
-- Read the API Reference resource
-- Explore payout functionality
-- Set up referral programs
-- Configure multi-tenant setup
-
-## Support
-
-- Documentation: https://docs.payram.com
-- GitHub: https://github.com/PayRam
-- Community: Contact via GitHub`,
-          },
-        ],
-      };
-    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: MARKDOWN, text: renderSetupPlan(buildSetupPlan({})) }],
+    }),
   );
 
-  // Resource 2: API Reference
   server.registerResource(
-    'Payram API Reference',
+    'api-reference',
     'payram://docs/api-reference',
     {
-      description: 'API endpoints and SDK methods reference',
-      mimeType: 'text/markdown',
+      title: 'PayRam API essentials',
+      description:
+        'Payment, webhook and payout contracts plus the credential matrix, verified against current core.',
+      mimeType: MARKDOWN,
+      cacheHint: STATIC_HINT,
     },
-    async () => {
-      return {
-        contents: [
-          {
-            uri: 'payram://docs/api-reference',
-            mimeType: 'text/markdown',
-            text: `# Payram API Reference
-
-## Base URL
-
-All API requests should be made to your self-hosted Payram server:
-
-\`\`\`
-https://your-payram-server.example/api/v1
-\`\`\`
-
-## Authentication
-
-Include your API key in the \`API-Key\` header:
-
-\`\`\`
-API-Key: your_api_key_here
-\`\`\`
-
-## Payments API
-
-### Create Payment
-
-**Endpoint**: \`POST /api/v1/payment\`
-
-Creates a new payment request and returns a checkout URL.
-
-**Request Body**:
-\`\`\`json
-{
-  "amountInUSD": 100,
-  "customerEmail": "customer@example.com",
-  "customerID": "customer_123"
-}
-\`\`\`
-
-**Response**:
-\`\`\`json
-{
-  "referenceId": "pay_abc123",
-  "checkoutUrl": "https://your-server.example/checkout?ref=pay_abc123",
-  "amount": 100,
-  "status": "OPEN"
-}
-\`\`\`
-
-### Get Payment Status
-
-**Endpoint**: \`GET /api/v1/payment/:referenceId\`
-
-Retrieves the current status of a payment.
-
-**Response**:
-\`\`\`json
-{
-  "referenceId": "pay_abc123",
-  "status": "FILLED",
-  "amount": 100,
-  "paidAmount": 100,
-  "currency": "USDT",
-  "blockchain": "ETH",
-  "customerEmail": "customer@example.com"
-}
-\`\`\`
-
-**Payment Statuses**:
-- \`OPEN\`: Awaiting payment
-- \`PARTIALLY_FILLED\`: Partial payment received
-- \`FILLED\`: Fully paid
-- \`OVER_FILLED\`: Overpaid
-- \`CANCELLED\`: Cancelled by merchant
-- \`UNDEFINED\`: Unknown status
-
-## Payouts API
-
-### Create Payout
-
-**Endpoint**: \`POST /api/v1/withdrawal/merchant\` (direct, no-OTP payout)
-
-Sends crypto to a destination address.
-
-**Request Body**:
-\`\`\`json
-{
-  "customerID": "customer_123",
-  "email": "customer@example.com",
-  "blockchainCode": "ethereum",
-  "currencyCode": "USDT",
-  "amount": "50",
-  "toAddress": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
-}
-\`\`\`
-
-## Webhooks
-
-Payram sends webhook events to your configured endpoint when payment status changes.
-
-**Headers**:
-- \`API-Key\`: Your webhook secret for verification
-- \`Content-Type\`: \`application/json\`
-
-**Event Payload**:
-\`\`\`json
-{
-  "referenceId": "pay_abc123",
-  "status": "FILLED",
-  "amount": 100,
-  "paidAmount": 100,
-  "timestamp": "2024-01-15T10:30:00Z"
-}
-\`\`\`
-
-**Event Types**:
-- Payment status changes (OPEN → FILLED, etc.)
-- Payout status updates
-- Referral reward distributions
-
-## SDK Methods (payram npm package)
-
-### Initialize Client
-
-\`\`\`typescript
-import { Payram } from 'payram';
-
-const payram = new Payram({
-  apiKey: process.env.PAYRAM_API_KEY,
-  baseUrl: process.env.PAYRAM_BASE_URL,
-});
-\`\`\`
-
-### Create Payment
-
-\`\`\`typescript
-const checkout = await payram.payments.initiatePayment({
-  amountInUSD: 100,
-  customerEmail: 'customer@example.com',
-  customerId: 'customer_123',
-});
-\`\`\`
-
-### Get Payment Status
-
-\`\`\`typescript
-const payment = await payram.payments.getPaymentRequest(referenceId);
-\`\`\`
-
-### Create Payout
-
-\`\`\`typescript
-const payout = await payram.payouts.createPayout({
-  customerID: 'customer_123',
-  email: 'customer@example.com',
-  blockchainCode: 'ethereum',
-  currencyCode: 'USDT',
-  amount: '50',
-  toAddress: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
-});
-\`\`\`
-
-## Rate Limits
-
-- Default: 100 requests per minute per API key
-- Contact your server administrator for custom limits
-
-## Error Codes
-
-- \`400\`: Bad Request - Invalid parameters
-- \`401\`: Unauthorized - Invalid API key
-- \`404\`: Not Found - Resource doesn't exist
-- \`429\`: Too Many Requests - Rate limit exceeded
-- \`500\`: Internal Server Error - Server issue
-
-## Support
-
-For detailed integration guides, visit the Setup Guide resource or use the \`setup-payram\` prompt.`,
-          },
-        ],
-      };
-    },
+    async (uri) => ({ contents: [{ uri: uri.href, mimeType: MARKDOWN, text: API_REFERENCE }] }),
   );
 
-  logger.info('Resources registered successfully');
+  const registerTaskTemplate = <T extends string>(
+    name: string,
+    prefix: string,
+    tasks: readonly T[],
+    title: (task: T) => string,
+    render: (task: T) => string,
+    meta: { title: string; description: string },
+  ) =>
+    server.registerResource(
+      name,
+      new ResourceTemplate(`${prefix}{task}`, {
+        list: async () => ({
+          resources: tasks.map((task) => ({
+            uri: `${prefix}${task}`,
+            name: `${name}-${task}`,
+            title: title(task),
+            mimeType: MARKDOWN,
+          })),
+        }),
+        complete: { task: (value) => tasks.filter((t) => t.startsWith(value ?? '')) },
+      }),
+      { ...meta, mimeType: MARKDOWN, cacheHint: STATIC_HINT },
+      async (uri, { task }) => {
+        const key = String(task) as T;
+        if (!tasks.includes(key)) throw new ResourceNotFoundError(uri.href);
+        return { contents: [{ uri: uri.href, mimeType: MARKDOWN, text: render(key) }] };
+      },
+    );
+
+  registerTaskTemplate(
+    'ops-playbook',
+    'payram://ops/playbook/',
+    OPS_TASKS,
+    (t) => getRecipe(t).title,
+    (t) => renderRecipe(getRecipe(t)),
+    {
+      title: 'PayRam ops recipe',
+      description: 'One direct-API operations recipe (same content as payram_ops_playbook).',
+    },
+  );
+  registerTaskTemplate(
+    'runbook',
+    'payram://runbooks/',
+    RUNBOOK_TASKS,
+    (t) => getRunbook(t).title,
+    (t) => renderRunbook(getRunbook(t)),
+    { title: 'PayRam runbook', description: 'One admin runbook (same content as payram_runbook).' },
+  );
+
+  logger.debug('Resources registered successfully');
 };

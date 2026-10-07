@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { logger } from '../../../utils/logger.js';
 import { safeHandler } from '../../common/errors.js';
@@ -104,7 +104,7 @@ const toolDefinitions: ToolDefinition[] = [
 ];
 
 export const registerMultilangPaymentTools = (server: McpServer) => {
-  logger.info('Registering multi-language payment route snippet tools');
+  logger.debug('Registering multi-language payment route snippet tools');
 
   for (const tool of toolDefinitions) {
     server.registerTool(

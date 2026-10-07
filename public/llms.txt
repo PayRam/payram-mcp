@@ -2,21 +2,26 @@
 
 > Private, self-hosted crypto payment gateway: payment links, hosted checkout
 > (USDC/BTC/ETH and more), on-chain deposit detection, sweeps to a cold wallet
-> you control. No signup, no KYB. This host also serves the PayRam MCP server.
+> you control. No account lock, no fund freeze, customer data never shared,
+> no deposit keys on the server - because it runs on your own server.
+> This host also serves the PayRam MCP server.
 
-Agents: start at /SKILL.md - it routes you to the right entry point
-(setup script for installing, MCP at /mcp for operating/integrating).
+Agents: start at /SKILL.md. On the MCP, call payram_setup_plan to install,
+payram_doctor to check a server, payram_runbook for admin tasks and
+payram_ops_playbook for day-to-day operations. The hosted MCP never holds
+merchant credentials: ops recipes run with your own credentials.
 
 ## Start here
 
-- [Agent front door (SKILL.md)](https://mcp.payram.com/SKILL.md): what PayRam is, install one-liner, MCP endpoint, credentials
-- [MCP endpoint](https://mcp.payram.com/mcp): HTTP JSON-RPC, no auth headers; tools for payment links, diagnosis, codegen
-- [Skills index](https://mcp.payram.com/.well-known/agent-skills/index.json): 16 specialized skills (setup, payments, webhooks, payouts, referrals, ...)
+- [Agent front door (SKILL.md)](https://mcp.payram.com/SKILL.md): what PayRam is, the four start-here tools, install command, human hand-offs, credentials
+- [MCP endpoint](https://mcp.payram.com/mcp): Streamable HTTP (POST), no auth headers, no SSE; setup plans, server checks, runbooks, ops recipes, codegen
+- [Skills index](https://mcp.payram.com/.well-known/agent-skills/index.json): 19 specialized skills (setup, payments, webhooks, payouts, testing, ...)
 
 ## Setup
 
+- Install on the server, in an interactive terminal once: `bash <(curl -fsSL https://payram.com/setup_payram_agents.sh) --testnet` (or `--mainnet`; the default is mainnet). Never pipe it into bash.
 - [Headless agent setup guide](https://github.com/PayRam/payram-scripts/blob/main/docs/PAYRAM_HEADLESS_AGENT.md): the canonical flow, env vars, merchant/operator modes, troubleshooting
-- [Setup script](https://raw.githubusercontent.com/PayRam/payram-scripts/main/setup_payram_agents.sh): one-step install -> payment link -> API key
+- [Setup script](https://payram.com/setup_payram_agents.sh): one-step install -> payment link -> API key
 
 ## Community
 

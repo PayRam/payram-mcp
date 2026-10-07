@@ -13,7 +13,7 @@ This skill teaches you to call PayRam dashboard APIs directly — no MCP server 
 
 Before using these APIs, you need:
 
-1. **`BASE_URL`** — Your PayRam server URL (e.g., `https://bedpayments.com:8443`)
+1. **`BASE_URL`** — Your PayRam server URL, the same origin as the dashboard (e.g., `https://pay.example.com`; no `:8080`/`:8443`)
 2. **`ACCESS_TOKEN`** — JWT Bearer token (see [`payram-auth`](https://github.com/payram/payram-mcp/tree/main/skills/payram-auth))
 3. **`PROJECT_ID`** — Auto-discovered (see below)
 
@@ -40,16 +40,16 @@ Returns an array of platforms. Use `id` from the first entry. Most merchants hav
 
 ## Common Questions & Which API to Call
 
-| Question | API to call |
-|----------|-------------|
-| "How much did I receive today/yesterday?" | [Daily Volume](#get-daily-volume-via-payment-search) |
-| "Find a payment by tx hash" | [Payment Search](#search-payments) with `query` |
-| "Show me all payments this week" | [Payment Search](#search-payments) with `dateFrom`/`dateTo` |
-| "How many payments are open vs closed?" | [Payment Summary](#payment-summary-counts) |
-| "What funds haven't been swept yet?" | [Unswept Balances](#unswept-balances) |
-| "Show sweep history" | [Sweep Transactions](#sweep-transaction-history) |
-| "What's my on-ramp volume?" | [On-Ramp Metrics](#on-ramp-metrics) |
-| "Show dashboard charts" | [Analytics Graph Data](#analytics-charts) |
+| Question                                  | API to call                                                 |
+| ----------------------------------------- | ----------------------------------------------------------- |
+| "How much did I receive today/yesterday?" | [Daily Volume](#get-daily-volume-via-payment-search)        |
+| "Find a payment by tx hash"               | [Payment Search](#search-payments) with `query`             |
+| "Show me all payments this week"          | [Payment Search](#search-payments) with `dateFrom`/`dateTo` |
+| "How many payments are open vs closed?"   | [Payment Summary](#payment-summary-counts)                  |
+| "What funds haven't been swept yet?"      | [Unswept Balances](#unswept-balances)                       |
+| "Show sweep history"                      | [Sweep Transactions](#sweep-transaction-history)            |
+| "What's my on-ramp volume?"               | [On-Ramp Metrics](#on-ramp-metrics)                         |
+| "Show dashboard charts"                   | [Analytics Graph Data](#analytics-charts)                   |
 
 ---
 
@@ -107,21 +107,21 @@ All filter fields are optional. Send `{}` to get the latest payments with defaul
 
 ### Filter Reference
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `query` | string | Free-text search: tx hash, customer ID, email, reference ID |
-| `paymentStatus` | string[] | `Filled`, `Partial filled`, `Pending`, `Cancelled` |
-| `webhookStatus` | string[] | `Success`, `Failed`, `Pending` |
-| `currency` | string[] | `BTC`, `ETH`, `USDC`, `USDT`, `MATIC`, `TRX` |
-| `network` | string[] | `bitcoin`, `ethereum`, `polygon`, `base`, `tron` |
-| `dateFrom` | string | ISO 8601 start date |
-| `dateTo` | string | ISO 8601 end date |
-| `createdBy` | string[] | `user` or `system` |
-| `externalPlatformIds` | uint[] | Filter by platform/project IDs |
-| `sortBy` | string | Field to sort by (e.g., `createdAt`, `amountInUSD`) |
-| `sortDirection` | string | `ASC` or `DESC` |
-| `limit` | int | Results per page (default varies) |
-| `offset` | int | Pagination offset |
+| Field                 | Type     | Description                                                 |
+| --------------------- | -------- | ----------------------------------------------------------- |
+| `query`               | string   | Free-text search: tx hash, customer ID, email, reference ID |
+| `paymentStatus`       | string[] | `Filled`, `Partial filled`, `Pending`, `Cancelled`          |
+| `webhookStatus`       | string[] | `Success`, `Failed`, `Pending`                              |
+| `currency`            | string[] | `BTC`, `ETH`, `USDC`, `USDT`, `MATIC`, `TRX`                |
+| `network`             | string[] | `bitcoin`, `ethereum`, `polygon`, `base`, `tron`            |
+| `dateFrom`            | string   | ISO 8601 start date                                         |
+| `dateTo`              | string   | ISO 8601 end date                                           |
+| `createdBy`           | string[] | `user` or `system`                                          |
+| `externalPlatformIds` | uint[]   | Filter by platform/project IDs                              |
+| `sortBy`              | string   | Field to sort by (e.g., `createdAt`, `amountInUSD`)         |
+| `sortDirection`       | string   | `ASC` or `DESC`                                             |
+| `limit`               | int      | Results per page (default varies)                           |
+| `offset`              | int      | Pagination offset                                           |
 
 ### Response
 
@@ -158,16 +158,19 @@ All filter fields are optional. Send `{}` to get the latest payments with defaul
 ### Common Recipes
 
 **Find payment by tx hash:**
+
 ```json
-{"query": "0xabc123def456..."}
+{ "query": "0xabc123def456..." }
 ```
 
 **Find payment by customer email:**
+
 ```json
-{"query": "customer@example.com"}
+{ "query": "customer@example.com" }
 ```
 
 **All completed payments today:**
+
 ```json
 {
   "paymentStatus": ["Filled"],
@@ -177,6 +180,7 @@ All filter fields are optional. Send `{}` to get the latest payments with defaul
 ```
 
 **All USDC payments on Base this week:**
+
 ```json
 {
   "currency": ["USDC"],
@@ -283,7 +287,7 @@ Each entry = one blockchain + currency combination. `count` = number of deposit 
 
 ## Sweep Transaction History
 
-View past sweep operations — how much was swept, fees charged, and when.
+View past sweep operations — how much was swept, and when.
 
 ### List All Sweeps
 
@@ -299,9 +303,7 @@ Authorization: Bearer <ACCESS_TOKEN>
   "sweepTransactionInfo": [
     {
       "numberOfUTXOs": 5,
-      "total": "0.15000000",
-      "payramFees": "0.00150000",
-      "feePercentage": "1.00"
+      "total": "0.15000000"
     }
   ]
 }
@@ -318,7 +320,6 @@ Authorization: Bearer <ACCESS_TOKEN>
 
 ```json
 {
-  "payramFeeAddress": "0xfee...",
   "blockchainType": "ETH",
   "sweepTransactions": [...]
 }
@@ -361,17 +362,17 @@ Authorization: Bearer <ACCESS_TOKEN>
 
 **Query Parameters:**
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `startDate` | string | ISO date |
-| `endDate` | string | ISO date |
-| `externalPlatformIDs` | number[] | Platform filter |
-| `blockchainCodes` | string[] | Blockchain filter |
-| `currencyCodes` | string[] | Currency filter |
-| `limit` | number | Pagination limit |
-| `offset` | number | Pagination offset |
-| `sortBy` | string | Sort field |
-| `order` | string | `ASC` or `DESC` |
+| Param                 | Type     | Description       |
+| --------------------- | -------- | ----------------- |
+| `startDate`           | string   | ISO date          |
+| `endDate`             | string   | ISO date          |
+| `externalPlatformIDs` | number[] | Platform filter   |
+| `blockchainCodes`     | string[] | Blockchain filter |
+| `currencyCodes`       | string[] | Currency filter   |
+| `limit`               | number   | Pagination limit  |
+| `offset`              | number   | Pagination offset |
+| `sortBy`              | string   | Sort field        |
+| `order`               | string   | `ASC` or `DESC`   |
 
 **Response:**
 
@@ -429,6 +430,7 @@ Content-Type: application/json
 **Common date filters:** `today`, `yesterday`, `last_7_days`, `last_14_days`, `last_30_days`, `this_month`, `last_month`
 
 For custom ranges:
+
 ```json
 {
   "date_filter": "custom",
@@ -467,16 +469,16 @@ Returns deposits that were detected but couldn't be matched to a payment request
 
 If you have referral campaigns configured:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/external-platform/{pid}/referral/campaigns` | GET | List campaigns |
-| `/api/v1/external-platform/{pid}/referral/campaigns/{cid}/rewards/total` | GET | Total rewards for campaign |
-| `/api/v1/external-platform/{pid}/referral/referrers/{refId}` | GET | Referrer profile |
-| `/api/v1/external-platform/{pid}/referral/referrers/{refId}/referee/total` | GET | Count of referred users |
-| `/api/v1/external-platform/{pid}/referral/referrers/{refId}/rewards/total` | GET | Total rewards earned |
-| `/api/v1/external-platform/{pid}/referral/referrers/{refId}/rewards` | GET | Reward event history |
-| `/api/v1/external-platform/{pid}/referral/referrers/{refId}/withdrawals` | GET | Withdrawal history |
-| `/api/v1/external-platform/{pid}/referral/payouts` | GET | Payout batches |
+| Endpoint                                                                   | Method | Description                |
+| -------------------------------------------------------------------------- | ------ | -------------------------- |
+| `/api/v1/external-platform/{pid}/referral/campaigns`                       | GET    | List campaigns             |
+| `/api/v1/external-platform/{pid}/referral/campaigns/{cid}/rewards/total`   | GET    | Total rewards for campaign |
+| `/api/v1/external-platform/{pid}/referral/referrers/{refId}`               | GET    | Referrer profile           |
+| `/api/v1/external-platform/{pid}/referral/referrers/{refId}/referee/total` | GET    | Count of referred users    |
+| `/api/v1/external-platform/{pid}/referral/referrers/{refId}/rewards/total` | GET    | Total rewards earned       |
+| `/api/v1/external-platform/{pid}/referral/referrers/{refId}/rewards`       | GET    | Reward event history       |
+| `/api/v1/external-platform/{pid}/referral/referrers/{refId}/withdrawals`   | GET    | Withdrawal history         |
+| `/api/v1/external-platform/{pid}/referral/payouts`                         | GET    | Payout batches             |
 
 **Permission required:** `read_referral`
 
@@ -503,6 +505,7 @@ When a user asks about their PayRam data, follow this sequence:
 **User:** "How much did I receive yesterday on Base?"
 
 **Agent:**
+
 1. Calls Payment Search with `dateFrom` = yesterday 00:00, `dateTo` = yesterday 23:59, `network` = ["base"], `paymentStatus` = ["Filled"]
 2. Sums `amountInUSD` from all results
 3. Groups by `currency` for breakdown
@@ -512,9 +515,9 @@ When a user asks about their PayRam data, follow this sequence:
 
 ## Related Skills
 
-| Skill | Purpose |
-|-------|---------|
-| [`payram-auth`](https://github.com/payram/payram-mcp/tree/main/skills/payram-auth) | Get your Bearer token (login, refresh, browser extraction) |
-| [`payram-setup`](https://github.com/payram/payram-mcp/tree/main/skills/payram-setup) | Deploy and configure a PayRam server |
-| [`payram-payment-integration`](https://github.com/payram/payram-mcp/tree/main/skills/payram-payment-integration) | Integrate payments into your app |
-| [`payram-webhook-integration`](https://github.com/payram/payram-mcp/tree/main/skills/payram-webhook-integration) | Receive payment events in real time |
+| Skill                                                                                                            | Purpose                                                    |
+| ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| [`payram-auth`](https://github.com/payram/payram-mcp/tree/main/skills/payram-auth)                               | Get your Bearer token (login, refresh, browser extraction) |
+| [`payram-setup`](https://github.com/payram/payram-mcp/tree/main/skills/payram-setup)                             | Deploy and configure a PayRam server                       |
+| [`payram-payment-integration`](https://github.com/payram/payram-mcp/tree/main/skills/payram-payment-integration) | Integrate payments into your app                           |
+| [`payram-webhook-integration`](https://github.com/payram/payram-mcp/tree/main/skills/payram-webhook-integration) | Receive payment events in real time                        |

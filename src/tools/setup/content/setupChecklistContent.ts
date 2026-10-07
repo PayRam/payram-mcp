@@ -1,74 +1,75 @@
 import type { SetupChecklistResponse } from '../../../types/setup.js';
+import { CONTAINER, INSTALL, REQUIREMENTS, SMART_BRIDGE, WEBHOOK } from '../../../facts/payram.js';
 
 export const PAYRAM_SETUP_CHECKLIST: SetupChecklistResponse = {
-  title: 'Merchant Setup Checklist',
+  title: 'PayRam setup checklist',
   description:
-    'Sequential tasks that take a merchant from fresh infrastructure to a production-ready Payram deployment.',
+    'From an empty server to a hardened gateway taking payments. For a personalised, command-level plan call payram_setup_plan.',
   items: [
     {
-      id: 'deployment-prereqs',
-      label: 'Confirm infrastructure + access',
-      description:
-        'Provision the server (minimum 2 CPU / 6 GB RAM, recommended 4 CPU / 8 GB RAM, 15 GB+ disk), allocate domains, and confirm who owns DNS, SSL, and SSH access before installation.',
-      docsRefs: ['deployment-guide/quick-setup.md', 'faqs/deployment-faqs.md'],
+      id: 'server',
+      label: 'Server, domain and firewall',
+      description: `${REQUIREMENTS.server}; ${REQUIREMENTS.os}. Point your domain at it. ${CONTAINER.firewall}`,
+      docsRefs: ['deployment-guide/quick-setup.md'],
     },
     {
-      id: 'root-account-setup',
-      label: 'Create root + master accounts',
-      description:
-        'Generate the master account(s) per network and back up seed phrases offline. The master wallet is the only key that can change the cold wallet address — never store it on the server. It is not needed for operations or sweeps.',
-      docsRefs: ['onboarding-guide/root-account-setup.md', 'faqs/fund-management-faqs.md'],
+      id: 'install',
+      label: 'Install PayRam (interactive once)',
+      description: `${INSTALL.installer} --testnet (or --mainnet). ${INSTALL.ttyRule}`,
+      docsRefs: ['deployment-guide/quick-setup.md'],
     },
     {
-      id: 'node-details',
-      label: 'Configure node endpoints',
+      id: 'root-account',
+      label: 'Create the root account right away',
       description:
-        'Connect Payram to your preferred RPC providers for each chain (Ethereum, Base, Tron, etc.) and verify connectivity/latency.',
-      docsRefs: [
-        'onboarding-guide/node-details-configuration.md',
-        'support/supported-networks-and-coins.md',
-      ],
+        'The first sign-up becomes root. Create it immediately after install, then back up the credentials and the ~/.payraminfo folder (AES key).',
+      docsRefs: ['onboarding-guide/root-account-setup.md'],
     },
     {
-      id: 'wallet-integration',
-      label: 'Integrate deposit + sweep wallets',
+      id: 'site-url',
+      label: 'Set the public site URL',
       description:
-        'Map how customer deposit wallets are derived, ensure SmartSweep contracts are deployed, and store hot wallet credentials securely.',
+        'Open the dashboard on your public domain and save Settings → Site URL. Payment links, emails and webhook origin use it.',
+    },
+    {
+      id: 'wallets',
+      label: 'Deposit wallets and cold wallet',
+      description:
+        'Deploy the smart-contract deposit wallet (USDC on Base is the fastest start; needs a little gas) and/or a BTC xpub wallet. Choose the cold wallet the contracts sweep to. Keep the master/deployer mnemonic offline.',
       docsRefs: ['onboarding-guide/wallet-integration.md', 'onboarding-guide/hot-wallet-setup.md'],
     },
     {
-      id: 'smtp-and-otp',
-      label: 'Wire up SMTP + alerts',
-      description:
-        'Configure SMTP host, credentials, and test OTP delivery so approvals and payout requests can be verified.',
-      docsRefs: ['deployment-guide/advanced-setup.md', 'features/payouts.md'],
-      optional: false,
+      id: 'payment-options',
+      label: 'Review payment options and Smart Bridge rails',
+      description: `${SMART_BRIDGE.defaults} ${SMART_BRIDGE.merchantImpact}`,
     },
     {
-      id: 'env-config',
-      label: 'Populate environment variables',
+      id: 'smtp',
+      label: 'SMTP for emails and OTP',
       description:
-        'Fill in PAYRAM_* values, RPC URLs, wallet addresses, and webhook secrets, then store the .env file in your secret manager.',
-      docsRefs: ['deployment-guide/quick-setup.md', 'faqs/configuration-faqs.md'],
+        'Configure SMTP so password resets, payment emails and payout OTPs are delivered.',
+      docsRefs: ['deployment-guide/advanced-setup.md'],
+      optional: true,
     },
     {
-      id: 'network-testing',
-      label: 'Test on supported networks',
-      description:
-        'Use the onboarding testing guide to run payment links, API-initiated payments, and sweeps on each network before going live.',
-      docsRefs: [
-        'onboarding-guide/testing-payment-links.md',
-        'support/supported-networks-and-coins.md',
-      ],
+      id: 'api-key-and-webhook',
+      label: 'API key and webhook',
+      description: `Create the project API key for your backend and register your webhook URL. Deliveries carry ${WEBHOOK.signature}. ${WEBHOOK.verify}`,
     },
     {
-      id: 'api-integration',
-      label: 'Integrate backend + webhooks',
+      id: 'test',
+      label: 'Test end to end',
       description:
-        'Install the SDK or call REST endpoints directly, create payment intents, and register webhook listeners for status updates.',
-      docsRefs: ['index.md', 'onboarding-guide/introduction.md'],
+        'Create a payment link, pay it on testnet (or preview with &test=true), confirm the webhook and the sweep to the cold wallet.',
+      docsRefs: ['onboarding-guide/testing-payment-links.md'],
+    },
+    {
+      id: 'operate',
+      label: 'Backups, SSL renewal, daily checks',
+      description:
+        'Back up the database together with ~/.payraminfo, make certificate renewal work, and run a daily check (payram_runbook "backup", "ssl_renewal_fix"; payram_ops_playbook "daily_check").',
     },
   ],
   notes:
-    'Use this as a living runbook — check off items per environment and attach links to evidence/screenshots for audits.',
+    'Anything that moves money, changes ownership (cold wallet, fees) or wipes data needs the human.',
 };

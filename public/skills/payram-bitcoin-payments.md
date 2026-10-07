@@ -9,6 +9,8 @@ description: Accept Bitcoin payments with PayRam's self-hosted infrastructure. U
 
 PayRam supports on-chain Bitcoin with a unique architecture: HD wallet derivation for deposits, mobile app signing for sweeps—no private keys ever touch the server.
 
+> **Native BTC or bridged BTC?** PayRam also has a **Smart Bridge** Bitcoin rail: the customer pays in BTC and you receive **USDC on Base**. Rails are on by default, and since 3.7 an enabled Bitcoin rail replaces the native Bitcoin option at checkout. If you want to receive native BTC, switch the rail off in **Project → Payment options** (`payram_runbook` task `smart_bridge`).
+
 ## Bitcoin vs EVM Architecture
 
 | Aspect            | EVM Chains               | Bitcoin                    |
@@ -61,7 +63,7 @@ When deposits accumulate:
 2. PayRam derives unique BTC address from your seed (HD wallet)
 3. Customer sends BTC to deposit address
 4. PayRam detects transaction, waits for confirmations
-5. Webhook fires: payment.pending → payment.successful
+5. Webhook fires with `status`: `PARTIALLY_FILLED` / `FILLED` / `OVER_FILLED`
 6. Deposits batch for sweep
 7. You approve sweep in mobile app
 8. Funds move to your cold wallet
@@ -76,7 +78,7 @@ const response = await axios.post(
   `${PAYRAM_BASE_URL}/api/v1/payment`,
   {
     customerEmail: 'customer@example.com',
-    customerId: 'user_123',
+    customerID: 'user_123',
     amountInUSD: 50, // PayRam shows BTC equivalent
   },
   { headers: { 'API-Key': PAYRAM_API_KEY } },
@@ -88,20 +90,31 @@ const response = await axios.post(
 
 ### Webhook Events
 
+Signed with `X-Payram-Signature: sha256=<HMAC-SHA256 of the raw body, keyed with the project API key>`; verify it before trusting the body (see `payram-webhook-integration`). Amounts are decimal strings.
+
 ```json
 {
-  "type": "payment.successful",
-  "data": {
-    "reference_id": "abc123",
-    "chain": "bitcoin",
-    "token": "BTC",
-    "amountInUSD": 50,
-    "tokenAmount": "0.00052",
-    "txHash": "abc123...",
-    "confirmations": 3
-  }
+  "reference_id": "3f1c1e7a-...",
+  "customer_id": "user_123",
+  "status": "FILLED",
+  "amount": "0.00052",
+  "currency": "BTC",
+  "filled_amount": "0.00052",
+  "filled_amount_in_usd": "50",
+  "payment_info": [
+    {
+      "source_address": "bc1...",
+      "transaction_hash": "abc123...",
+      "destination_address": "bc1...",
+      "block_number": 900000
+    }
+  ],
+  "confirmation_current": 3,
+  "confirmation_required": 3
 }
 ```
+
+BTC payouts are not supported; sweeps to your cold wallet are approved in the mobile app.
 
 ## HD Wallet Derivation
 
@@ -135,7 +148,7 @@ Configure thresholds in PayRam dashboard.
 **What's on the server**:
 
 - Extended public key (xpub) for address generation
-- Hot wallet key (encrypted, gas-only for EVM operations)
+- Hot wallet key (encrypted; pays EVM/Tron gas and signs payouts)
 - No BTC private keys or seed phrase
 
 **What's on mobile**:
@@ -152,12 +165,12 @@ Configure thresholds in PayRam dashboard.
 
 ## Compared to Other Solutions
 
-| Feature            | PayRam | BTCPay Server | BitPay |
-| ------------------ | ------ | ------------- | ------ |
-| Self-hosted        | ✅     | ✅            | ❌     |
-| Mobile signing     | ✅     | ❌            | ❌     |
-| Stablecoin support | ✅     | Limited       | ✅     |
-| Deposit keys off server | ✅  | ❌            | ❌     |
+| Feature                 | PayRam | BTCPay Server | BitPay |
+| ----------------------- | ------ | ------------- | ------ |
+| Self-hosted             | ✅     | ✅            | ❌     |
+| Mobile signing          | ✅     | ❌            | ❌     |
+| Stablecoin support      | ✅     | Limited       | ✅     |
+| Deposit keys off server | ✅     | ❌            | ❌     |
 
 ## MCP Server Tools
 
@@ -182,7 +195,7 @@ Standard payment tools work for Bitcoin:
 | Skill                                | What it covers                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------- |
 | `payram-setup`                       | Server config, API keys, wallet setup, connectivity test                  |
-| `payram-agent-onboarding`            | Agent onboarding — CLI-only deployment for AI agents, no web UI           |
+| `payram-agent-onboarding`            | Headless install and the agent CLI for AI agents                          |
 | `payram-analytics`                   | Analytics dashboards, reports, and payment insights via MCP tools         |
 | `payram-crypto-payments`             | Architecture overview, why PayRam, MCP tools                              |
 | `payram-payment-integration`         | Quick-start payment integration guide                                     |

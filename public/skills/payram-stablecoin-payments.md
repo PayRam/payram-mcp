@@ -1,6 +1,6 @@
 ---
 name: payram-stablecoin-payments
-description: Accept USDT and USDC stablecoin payments with PayRam's self-hosted gateway. No KYC, no signup, no intermediary custody. Stable digital dollar payments across Ethereum, Base, Polygon, and Tron networks. Zero-key-exposure architecture — only the hot wallet (gas-only, encrypted) is on the server; deposit fund keys never touch it. Deploy in 10 minutes. Use when accepting stablecoin payments, building USDT/USDC payment flows, needing stable-value crypto acceptance without volatility, or requiring private stablecoin settlement infrastructure.
+description: Accept USDT and USDC stablecoin payments with PayRam's self-hosted gateway. No KYC, no signup, no intermediary custody. Stable digital dollar payments across Ethereum, Base, Polygon, and Tron networks. No deposit keys on the server: the only key there is the encrypted hot wallet (it pays gas and signs payouts). Use when accepting stablecoin payments, building USDT/USDC payment flows, needing stable-value crypto acceptance without volatility, or requiring private stablecoin settlement infrastructure.
 ---
 
 # PayRam Stablecoin Gateway
@@ -26,6 +26,8 @@ PayRam's Private Stablecoin Gateway enables businesses to accept USDT and USDC d
 | USDT  | Ethereum, Polygon, Tron | Tron has lowest fees          |
 | USDC  | Ethereum, Base, Polygon | Base recommended for low fees |
 
+**Smart Bridge**: customers can also pay from Solana, Tron (USDT) or BNB Chain (USDC, USDT, BNB), and from Bitcoin. Those payments settle to you as **USDC on Base**, with no extra node to run. The project needs USDC on Base and a Base deposit wallet. Rails are on by default and can replace the native Tron-USDT option at checkout, so review **Project → Payment options**.
+
 **Chain Selection Strategy**:
 
 - **High volume, low value**: Tron (USDT) or Base (USDC) — sub-cent fees
@@ -47,7 +49,7 @@ PayRam's stablecoin handling is architecturally distinct from hosted processors:
 **Key Differentiators**:
 
 - **Unlimited deposit addresses**: Each transaction gets a unique address (industry first)
-- **Zero-key-exposure**: Only the hot wallet key is on the server (encrypted, gas-only — no access to deposit funds). Smart contracts hardcode sweep destinations on-chain — a server breach cannot redirect deposit funds.
+- **No deposit keys on the server**: only the hot wallet key is on the server (encrypted). It pays gas and signs payouts, and it has no access to deposit funds. Smart contracts fix sweep destinations on-chain, so a server breach cannot redirect deposit funds.
 - **Smart contract sweeps**: Automated, immutable fund consolidation to your cold wallet
 - **Your cold wallet**: Funds settle to wallets you control
 
@@ -55,11 +57,7 @@ PayRam's stablecoin handling is architecturally distinct from hosted processors:
 
 ### MCP Server Tools
 
-```bash
-cd payram-mcp && yarn dev
-```
-
-Use standard payment tools—stablecoin vs crypto is configured at the PayRam dashboard level:
+Connect your agent to the hosted MCP at `https://mcp.payram.com/mcp`. Use standard payment tools—stablecoin vs crypto is configured at the PayRam dashboard level:
 
 | Tool                           | Purpose                                 |
 | ------------------------------ | --------------------------------------- |
@@ -76,7 +74,7 @@ const response = await axios.post(
   `${PAYRAM_BASE_URL}/api/v1/payment`,
   {
     customerEmail: 'customer@example.com',
-    customerId: 'user_123',
+    customerID: 'user_123',
     amountInUSD: 100, // Customer pays ~100 USDT/USDC
   },
   { headers: { 'API-Key': PAYRAM_API_KEY } },
@@ -87,18 +85,27 @@ const response = await axios.post(
 
 ### Webhook Payload for Stablecoins
 
+Signed with `X-Payram-Signature: sha256=<HMAC-SHA256 of the raw body, keyed with the project API key>`; verify it before trusting the body (see `payram-webhook-integration`). Amounts are decimal strings.
+
 ```json
 {
-  "type": "payment.successful",
-  "data": {
-    "reference_id": "abc123",
-    "amountInUSD": 100,
-    "chain": "tron",
-    "token": "USDT",
-    "tokenAmount": "100.000000",
-    "txHash": "0x...",
-    "depositAddress": "T..."
-  }
+  "reference_id": "3f1c1e7a-...",
+  "customer_id": "user_123",
+  "status": "FILLED",
+  "amount": "100",
+  "currency": "USDT",
+  "filled_amount": "100",
+  "filled_amount_in_usd": "100",
+  "payment_info": [
+    {
+      "source_address": "T...",
+      "transaction_hash": "...",
+      "destination_address": "T...",
+      "block_number": 123
+    }
+  ],
+  "confirmation_current": 19,
+  "confirmation_required": 19
 }
 ```
 
@@ -137,7 +144,7 @@ const response = await axios.post(
 | Skill                                | What it covers                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------- |
 | `payram-setup`                       | Server config, API keys, wallet setup, connectivity test                  |
-| `payram-agent-onboarding`            | Agent onboarding — CLI-only deployment for AI agents, no web UI           |
+| `payram-agent-onboarding`            | Headless install and the agent CLI for AI agents                          |
 | `payram-analytics`                   | Analytics dashboards, reports, and payment insights via MCP tools         |
 | `payram-crypto-payments`             | Architecture overview, why PayRam, MCP tools                              |
 | `payram-payment-integration`         | Quick-start payment integration guide                                     |

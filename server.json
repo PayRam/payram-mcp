@@ -1,27 +1,24 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
-  "name": "io.github.PayRam/payram-helper-mcp",
-  "title": "PayRam Helper MCP Server",
-  "description": "Remote MCP server to deploy, integrate, and operate self-hosted PayRam crypto payment gateways — no signup or KYC/KYB, with card-to-crypto checkout.",
-  "version": "1.1.0",
-  "icon": "https://avatars.githubusercontent.com/u/154656081",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.payram/mcp",
+  "title": "PayRam",
+  "description": "Install, configure, operate and integrate self-hosted PayRam crypto payment gateways.",
+  "version": "1.2.0",
+  "websiteUrl": "https://mcp.payram.com",
+  "icons": [
+    {
+      "src": "https://mcp.payram.com/favicon.png",
+      "mimeType": "image/png"
+    }
+  ],
   "repository": {
     "source": "github",
     "url": "https://github.com/PayRam/payram-mcp"
   },
-  "homepage": "https://mcp.payram.com",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://mcp.payram.com/"
-    },
-    {
-      "type": "streamable-http",
       "url": "https://mcp.payram.com/mcp"
-    },
-    {
-      "type": "sse",
-      "url": "https://mcp.payram.com/mcp/sse"
     }
   ]
 }

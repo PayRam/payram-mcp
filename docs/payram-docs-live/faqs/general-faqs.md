@@ -104,7 +104,8 @@ _Not yet._ PayRam currently processes **crypto-only** transactions. Automated cr
 
 What fees does PayRam charge?
 
-PayRam charges a flat 1%-5% fee on settlement, when funds are withdrawn to the cold wallet. PayRam does NOT charge any other fees or subscriptions or has any reserve fund requirements.
+<!-- Local patch (payram-mcp, 2026-09-16): fee answer replaced per the PayRam fee rule. This mirror is vendored by scripts/fetchDocs.ts; fix docs.payram.com upstream too or a refetch restores the old text. -->
+Commercial terms are discussed directly with the PayRam team.
 
 * * *
 

@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { logger } from '../../../utils/logger.js';
 import { safeHandler } from '../../common/errors.js';
 import { buildToolSchemas } from '../../common/schemas.js';
@@ -355,7 +355,7 @@ const summarizeFindings = (
 };
 
 export const registerProjectAssessmentTool = (server: McpServer) => {
-  logger.info('Registering Payram project assessment tool');
+  logger.debug('Registering Payram project assessment tool');
 
   server.registerTool(
     'assess_payram_project',

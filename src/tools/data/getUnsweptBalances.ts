@@ -1,5 +1,6 @@
+import { SWEEP_GAS_STATUSES } from '../../facts/payram.js';
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { logger } from '../../utils/logger.js';
 import { buildToolSchemas } from '../common/schemas.js';
 import { safeHandler } from '../common/errors.js';
@@ -8,7 +9,7 @@ import type { AddressBalanceEntry } from '../../api/types.js';
 
 const sweepErrorSchema = z
   .object({
-    statusCode: z.string(), // e.g. HOT_WALLET_LOW_GAS, HOT_WALLET_MISSING
+    statusCode: z.string(), // e.g. LOW_NATIVE_BALANCE, HOT_WALLET_MISSING
     category: z.string(),
     reason: z.string(),
     actionHint: z.string().optional(),
@@ -16,6 +17,7 @@ const sweepErrorSchema = z
     occurredAt: z.string(),
     address: z.string(),
     txHash: z.string().optional(),
+    hotWalletAddress: z.string().optional(),
   })
   .passthrough();
 
@@ -67,9 +69,11 @@ const formatEntry = (e: AddressBalanceEntry): string => {
 const diagnoseEntry = (e: AddressBalanceEntry): string | null => {
   if (e.lastSweepError) {
     const err = e.lastSweepError;
+    // Core nests the address to top up inside lastSweepError for gas failures.
+    const topUp = err.hotWalletAddress ?? e.hotWalletAddress;
     const gas =
-      err.statusCode === 'HOT_WALLET_LOW_GAS' && e.hotWalletAddress
-        ? ` — send native gas to the hot wallet: ${e.hotWalletAddress}`
+      SWEEP_GAS_STATUSES.includes(err.statusCode) && topUp
+        ? ` — the human needs to send native gas to the hot wallet: ${topUp}`
         : '';
     const hint = err.actionHint ? ` ${err.actionHint}` : '';
     return `${e.blockchainCode}/${e.currencyCode}: last sweep failed [${err.statusCode}] ${err.reason}.${hint}${gas}${err.retryable ? ' (retryable — will be retried automatically)' : ''}`;
@@ -93,7 +97,7 @@ export const registerGetUnsweptBalancesTool = (server: McpServer) => {
       description:
         'Returns unswept (unsettled) balances across all wallets, broken down by blockchain and currency. ' +
         'Shows sweep readiness per entry (sweep, sweep_in_progress, sweep_not_allowed, no_balance) AND why ' +
-        'stuck funds are stuck: lastSweepError (e.g. HOT_WALLET_LOW_GAS with the hot-wallet address to fund), ' +
+        'stuck funds are stuck: lastSweepError (e.g. LOW_NATIVE_BALANCE with the hot-wallet address to fund), ' +
         'pending SCW deployment, or missing cold wallet. Use this to answer "where is my money / why has it not swept".',
       inputSchema: schemas.input,
       outputSchema: schemas.output,
@@ -121,9 +125,7 @@ export const registerGetUnsweptBalancesTool = (server: McpServer) => {
           const rows = balances.map(formatEntry).join('\n');
           message = `${header}\n${separator}\n${rows}`;
 
-          const diagnoses = balances
-            .map(diagnoseEntry)
-            .filter((d): d is string => d !== null);
+          const diagnoses = balances.map(diagnoseEntry).filter((d): d is string => d !== null);
           if (diagnoses.length) {
             message += `\n\nWhy funds aren't moving:\n${diagnoses.map((d) => `  • ${d}`).join('\n')}`;
           }

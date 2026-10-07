@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { logger } from '../../utils/logger.js';
 import { buildToolSchemas } from '../common/schemas.js';
 import { safeHandler } from '../common/errors.js';
@@ -64,7 +64,7 @@ const schemas = buildToolSchemas({
         .optional()
         .describe(
           'Sort field. Valid: created_at, updated_at, payment_status, currency, network, ' +
-          'block_id, from_address, to_address, invoice_id, reference_id, customer_id, email, created_by.',
+            'block_id, from_address, to_address, invoice_id, reference_id, customer_id, email, created_by.',
         ),
       sortDirection: z
         .enum(['ASC', 'DESC'])
@@ -77,12 +77,7 @@ const schemas = buildToolSchemas({
         .max(200)
         .optional()
         .describe('Number of results per page. Defaults to 50.'),
-      offset: z
-        .number()
-        .int()
-        .min(0)
-        .optional()
-        .describe('Pagination offset. Defaults to 0.'),
+      offset: z.number().int().min(0).optional().describe('Pagination offset. Defaults to 0.'),
     })
     .strict(),
   output: z.object({
@@ -147,7 +142,10 @@ export const registerSearchPaymentsTool = (server: McpServer) => {
         const separator = `  ${'─'.repeat(70)}`;
         const rows = result.data.map(formatRow).join('\n');
 
-        const message = showing > 0 ? `${header}\n${separator}\n${rows}` : 'No payments found matching the given filters.';
+        const message =
+          showing > 0
+            ? `${header}\n${separator}\n${rows}`
+            : 'No payments found matching the given filters.';
 
         logger.info('Payment search completed', { totalCount: result.totalCount, showing });
 

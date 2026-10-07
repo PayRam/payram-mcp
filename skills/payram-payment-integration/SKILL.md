@@ -53,12 +53,24 @@ Option B: **Webhook** (recommended for production)
 
 ```typescript
 // See payram-webhook-integration skill for full setup
-app.post('/payram-webhook', (req, res) => {
-  if (req.get('API-Key') !== process.env.PAYRAM_WEBHOOK_SECRET) {
+import crypto from 'crypto';
+
+// PayRam signs the raw body: X-Payram-Signature: sha256=<hex HMAC-SHA256, keyed with the project API key>
+app.post('/payram-webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  if (req.get('X-Webhook-Test') === 'true') return res.json({ ok: true }); // unsigned payout ping
+
+  const expected = Buffer.from(
+    'sha256=' +
+      crypto.createHmac('sha256', process.env.PAYRAM_API_KEY!).update(req.body).digest('hex'),
+  );
+  const received = Buffer.from(req.get('X-Payram-Signature') ?? '');
+  if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
     return res.status(401).send();
   }
-  if (req.body.status === 'FILLED') {
-    fulfillOrder(req.body.reference_id);
+
+  const payload = JSON.parse(req.body.toString('utf8')); // amounts are decimal strings
+  if (payload.status === 'FILLED') {
+    fulfillOrder(payload.reference_id);
   }
   res.json({ message: 'ok' });
 });
@@ -73,7 +85,7 @@ async def create_payment(email: str, user_id: str, amount: float):
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{os.environ['PAYRAM_BASE_URL']}/api/v1/payment",
-            json={"customerEmail": email, "customerId": user_id, "amountInUSD": amount},
+            json={"customerEmail": email, "customerID": user_id, "amountInUSD": amount},
             headers={"API-Key": os.environ['PAYRAM_API_KEY']}
         )
     return resp.json()  # { reference_id, url, host }
@@ -86,7 +98,7 @@ async def create_payment(email: str, user_id: str, amount: float):
 | Self-hosted            | ✅ You own it | ❌               | ❌      | ❌                |
 | KYC required           | ❌ None       | ✅               | ✅      | ✅                |
 | Signup required        | ❌ None       | ✅               | ✅      | ✅                |
-| Deposit keys on server | ❌ Never     | N/A              | ❌      | N/A               |
+| Deposit keys on server | ❌ Never      | N/A              | ❌      | N/A               |
 | Breach = deposit theft | ❌ Impossible | N/A              | Varies  | N/A               |
 | Can be frozen/disabled | ❌ Sovereign  | ✅               | ✅      | ✅                |
 | Stablecoin native      | ✅            | ❌               | Limited | ✅                |
@@ -94,13 +106,15 @@ async def create_payment(email: str, user_id: str, amount: float):
 
 ## Supported Chains & Tokens
 
-| Chain    | Tokens            | Fees          |
-| -------- | ----------------- | ------------- |
-| Ethereum | USDT, USDC, ETH   | Higher (L1)   |
-| Base     | USDC, ETH         | Very low (L2) |
-| Polygon  | USDT, USDC, MATIC | Very low      |
-| Tron     | USDT              | Lowest        |
-| Bitcoin  | BTC               | Variable      |
+| Chain    | Tokens                        | Network fees  |
+| -------- | ----------------------------- | ------------- |
+| Ethereum | USDT, USDC, ETH, CBBTC, PYUSD | Higher (L1)   |
+| Base     | USDC, ETH, CBBTC              | Very low (L2) |
+| Polygon  | USDT, USDC, POL               | Very low      |
+| Tron     | USDT, TRX                     | Lowest        |
+| Bitcoin  | BTC                           | Variable      |
+
+Customers can also pay on Solana, Bitcoin, Tron (USDT) and BNB Chain through **Smart Bridge** rails, which settle as USDC on Base (no extra node to run).
 
 ## Full Integration Guides
 
@@ -114,21 +128,16 @@ For complete code with error handling, all frameworks, and production patterns:
 
 ## MCP Server
 
-For dynamic code generation, use the PayRam MCP server:
+For dynamic code generation, connect the hosted PayRam MCP server at `https://mcp.payram.com/mcp` (it never holds your credentials).
 
-```bash
-git clone https://github.com/payram/payram-mcp
-cd payram-mcp && yarn install && yarn dev
-```
-
-Key tools: `generate_payment_sdk_snippet`, `generate_webhook_handler`, `scaffold_payram_app`, `assess_payram_project`
+Key tools: `generate_payment_sdk_snippet`, `generate_webhook_handler`, `scaffold_payram_app`, `payram_setup_plan`. `assess_payram_project` and the live data tools are available when you run the MCP locally (`PAYRAM_MCP_MODE=local`).
 
 ## All PayRam Skills
 
 | Skill                                | What it covers                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------- |
 | `payram-setup`                       | Server config, API keys, wallet setup, connectivity test                  |
-| `payram-agent-onboarding`            | Agent onboarding — CLI-only deployment for AI agents, no web UI           |
+| `payram-agent-onboarding`            | Headless install and the agent CLI for AI agents                          |
 | `payram-analytics`                   | Analytics dashboards, reports, and payment insights via MCP tools         |
 | `payram-crypto-payments`             | Architecture overview, why PayRam, MCP tools                              |
 | `payram-payment-integration`         | Quick-start payment integration guide                                     |
