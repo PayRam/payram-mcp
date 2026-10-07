@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { logger } from '../../utils/logger.js';
 import { buildToolSchemas } from '../common/schemas.js';
 import { safeHandler } from '../common/errors.js';
@@ -16,10 +16,7 @@ const breakdownSchema = z.object({
 const schemas = buildToolSchemas({
   input: z
     .object({
-      date: z
-        .string()
-        .optional()
-        .describe('Date in YYYY-MM-DD format. Defaults to today (UTC).'),
+      date: z.string().optional().describe('Date in YYYY-MM-DD format. Defaults to today (UTC).'),
       externalPlatformId: z
         .string()
         .optional()
@@ -103,7 +100,10 @@ const aggregate = (
 const formatBreakdown = (items: { name: string; count: number; volumeUSD: number }[]): string => {
   if (items.length === 0) return '  (none)';
   return items
-    .map((item) => `    ${item.name.padEnd(10)} $${item.volumeUSD.toFixed(2).padStart(12)}  (${item.count} payments)`)
+    .map(
+      (item) =>
+        `    ${item.name.padEnd(10)} $${item.volumeUSD.toFixed(2).padStart(12)}  (${item.count} payments)`,
+    )
     .join('\n');
 };
 

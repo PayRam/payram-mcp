@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write # required for github-oidc auth
 
 jobs:
   publish:
@@ -41,13 +40,18 @@ jobs:
           jq --arg v "$VERSION" '.version = $v' server.json > server.tmp && mv server.tmp server.json
 
       - name: Download server schema
-        run: curl -L https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json -o /tmp/mcp-server-schema.json
+        # Follow whatever schema server.json declares, so bumping it is a one-file change.
+        run: curl -fL "$(jq -r '."$schema"' server.json)" -o /tmp/mcp-server-schema.json
 
       - name: Validate server.json against schema
         run: npx ajv-cli@5 validate -s /tmp/mcp-server-schema.json -d server.json --strict=false
 
-      - name: Authenticate to MCP Registry (GitHub OIDC)
-        run: ./mcp-publisher login github-oidc
+      # com.payram/* is proven by the MCPv1 TXT record on the payram.com apex,
+      # so publishing needs that key rather than a GitHub identity.
+      - name: Authenticate to MCP Registry (payram.com DNS proof)
+        run: ./mcp-publisher login dns --domain=payram.com --private-key="$DNS_KEY"
+        env:
+          DNS_KEY: ${{ secrets.MCP_REGISTRY_DNS_KEY }}
 
       - name: Publish server to MCP Registry
         run: ./mcp-publisher publish

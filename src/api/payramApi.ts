@@ -85,9 +85,7 @@ export const searchPayments = async (
  * Get payment summary counts.
  * POST /api/v1/external-platform/{platformId}/payment/summary
  */
-export const getPaymentSummary = async (
-  platformId: string,
-): Promise<PaymentSummaryResponse> => {
+export const getPaymentSummary = async (platformId: string): Promise<PaymentSummaryResponse> => {
   const response = await authenticatedFetch(
     `/api/v1/external-platform/${platformId}/payment/summary`,
     {
@@ -152,9 +150,7 @@ export const listRecipients = async (): Promise<{ recipients: Recipient[]; total
  * JWT Bearer flow — because POST /api/v1/payment is the merchant-facing endpoint.
  * POST /api/v1/payment
  */
-export const createPaymentLink = async (
-  params: CreatePaymentLinkParams,
-): Promise<PaymentLink> => {
+export const createPaymentLink = async (params: CreatePaymentLinkParams): Promise<PaymentLink> => {
   const baseUrl = getPayramBaseUrl().replace(/\/+$/, '');
   const apiKey = getPayramApiKey();
 
@@ -225,7 +221,9 @@ export const testBlockchainConnection = async (
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(apiErrorMessage(`Test connection for ${blockchainCode}`, response.status, body));
+    throw new Error(
+      apiErrorMessage(`Test connection for ${blockchainCode}`, response.status, body),
+    );
   }
 
   const data = (await response.json()) as Partial<NodeConnectionResult>;
@@ -337,5 +335,20 @@ export const getAddressBalances = async (): Promise<AddressBalanceEntry[]> => {
     throw new Error(apiErrorMessage('Address balances', response.status, body));
   }
 
-  return (await response.json()) as AddressBalanceEntry[];
+  // A fresh install with no deposits answers JSON null.
+  return ((await response.json()) as AddressBalanceEntry[] | null) ?? [];
+};
+
+/**
+ * Read the canonical site URL (payram.server.url) that payment links,
+ * emails and webhook origin are built from.
+ * GET /api/v1/system/site-url — admin JWT (read_configuration).
+ */
+export const getSiteUrl = async (): Promise<unknown> => {
+  const response = await authenticatedFetch('/api/v1/system/site-url', { method: 'GET' });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(apiErrorMessage('Site URL', response.status, body));
+  }
+  return response.json();
 };

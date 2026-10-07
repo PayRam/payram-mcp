@@ -388,7 +388,7 @@ Use `generate_env_template` MCP tool to scaffold this.
 | Skill                                | What it covers                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------- |
 | `payram-setup`                       | Server config, API keys, wallet setup, connectivity test                  |
-| `payram-agent-onboarding`            | Agent onboarding — CLI-only deployment for AI agents, no web UI           |
+| `payram-agent-onboarding`            | Headless install and the agent CLI for AI agents                          |
 | `payram-analytics`                   | Analytics dashboards, reports, and payment insights via MCP tools         |
 | `payram-crypto-payments`             | Architecture overview, why PayRam, MCP tools                              |
 | `payram-payment-integration`         | Quick-start payment integration guide                                     |

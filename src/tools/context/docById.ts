@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { buildToolSchemas } from '../common/schemas.js';
@@ -52,11 +52,11 @@ const describeMissingDoc = async (relativePath: string): Promise<string> => {
       const prettySection = section === 'root' ? 'the root docs folder' : `docs/${section}`;
       return `No doc found for "${relativePath}". Available entries in ${prettySection}: ${siblings.join(', ')}.`;
     }
-  } catch (error) {
+  } catch {
     // Ignore directory listing errors; we'll fall back to the generic message below.
   }
 
-  return `No doc found for "${relativePath}". Expected file at ${fullPath}. Ensure your local docs mirror the Payram docs tree or request a different id.`;
+  return `No doc found for "${relativePath}". Call list_payram_docs to see the available ids.`;
 };
 
 const buildDocMetadata = (id: string) => {

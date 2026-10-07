@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { logger } from '../../../utils/logger.js';
 import { safeHandler } from '../../common/errors.js';
@@ -144,7 +144,7 @@ const selectRouteSnippet = (framework: GenerateRouteSnippetInput['framework']) =
 };
 
 export const registerPaymentTools = (server: McpServer) => {
-  logger.info('Registering payment tools...');
+  logger.debug('Registering payment tools...');
 
   server.registerTool(
     'generate_payment_sdk_snippet',

@@ -1,10 +1,17 @@
-import dotenv from 'dotenv';
+import { isHosted } from './runtime.js';
+import { logger } from '../utils/logger.js';
 
-const didLoad = dotenv.config();
-if (didLoad.error && process.env.NODE_ENV !== 'production') {
-  console.warn('[payram-mcp-server] Failed to load .env file:', didLoad.error.message);
+// Local mode reads ./.env if present (Node's built-in loader; no dotenv needed).
+try {
+  process.loadEnvFile();
+} catch {
+  // no .env file — fine
 }
 
+/**
+ * A credential this server needs is not configured. On the hosted server
+ * credentials are always treated as absent (it never holds merchant creds).
+ */
 export class MissingEnvironmentVariableError extends Error {
   constructor(variableName: string) {
     super(`Missing required environment variable: ${variableName}`);
@@ -12,48 +19,41 @@ export class MissingEnvironmentVariableError extends Error {
   }
 }
 
-const getEnv = (key: string): string | undefined => {
-  const value = process.env[key];
-  return value?.trim() ? value : undefined;
-};
+type CredentialKey =
+  | 'PAYRAM_BASE_URL'
+  | 'PAYRAM_API_KEY'
+  | 'PAYRAM_ACCESS_TOKEN'
+  | 'PAYRAM_REFRESH_TOKEN'
+  | 'PAYRAM_EXTERNAL_PLATFORM_ID';
 
-export const getPayramBaseUrl = (): string => {
-  const value = getEnv('PAYRAM_BASE_URL');
-  if (!value) {
-    throw new MissingEnvironmentVariableError('PAYRAM_BASE_URL');
+let warnedHostedEnv = false;
+
+const read = (key: CredentialKey): string | undefined => {
+  const value = process.env[key]?.trim();
+  if (!value) return undefined;
+  if (isHosted()) {
+    if (!warnedHostedEnv) {
+      warnedHostedEnv = true;
+      logger.error('PAYRAM_* credential env vars are set on a hosted deployment; ignoring them.');
+    }
+    return undefined;
   }
   return value;
 };
 
-export const getPayramApiKey = (): string => {
-  const value = getEnv('PAYRAM_API_KEY');
-  if (!value) {
-    throw new MissingEnvironmentVariableError('PAYRAM_API_KEY');
-  }
+const requireCredential = (key: CredentialKey): string => {
+  const value = read(key);
+  if (!value) throw new MissingEnvironmentVariableError(key);
   return value;
 };
 
-export const getPayramAccessToken = (): string => {
-  const value = getEnv('PAYRAM_ACCESS_TOKEN');
-  if (!value) {
-    throw new MissingEnvironmentVariableError('PAYRAM_ACCESS_TOKEN');
-  }
-  return value;
-};
+export const getPayramBaseUrl = (): string => requireCredential('PAYRAM_BASE_URL');
+export const getPayramApiKey = (): string => requireCredential('PAYRAM_API_KEY');
+export const getPayramAccessToken = (): string => requireCredential('PAYRAM_ACCESS_TOKEN');
+export const getPayramRefreshToken = (): string => requireCredential('PAYRAM_REFRESH_TOKEN');
 
-export const getPayramRefreshToken = (): string => {
-  const value = getEnv('PAYRAM_REFRESH_TOKEN');
-  if (!value) {
-    throw new MissingEnvironmentVariableError('PAYRAM_REFRESH_TOKEN');
-  }
-  return value;
-};
-
-export const getPayramExternalPlatformId = (): string | undefined => {
-  return getEnv('PAYRAM_EXTERNAL_PLATFORM_ID');
-};
-
-export const getServerPort = (): number => {
-  const parsed = Number(getEnv('PORT') ?? '3333');
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3333;
-};
+export const getOptionalPayramBaseUrl = (): string | undefined => read('PAYRAM_BASE_URL');
+export const getOptionalPayramApiKey = (): string | undefined => read('PAYRAM_API_KEY');
+export const getOptionalPayramAccessToken = (): string | undefined => read('PAYRAM_ACCESS_TOKEN');
+export const getPayramExternalPlatformId = (): string | undefined =>
+  read('PAYRAM_EXTERNAL_PLATFORM_ID');

@@ -1,42 +1,69 @@
 {
   "$schema": "https://modelcontextprotocol.io/schemas/draft/server-card.json",
   "serverInfo": {
-    "name": "io.github.PayRam/payram-helper-mcp",
-    "title": "PayRam Helper MCP Server",
-    "version": "1.1.0",
-    "description": "Remote MCP server for deploying and operating self-hosted PayRam crypto payment gateways — no signup, no KYC/KYB to run. An AI agent can stand up a store and accept payments (including card-to-crypto checkout — shoppers pay by card, the merchant receives crypto) without registering with PayRam, a bank, or any processor. Create invoices, monitor on-chain deposits, manage payouts, and sweep settled funds to cold storage — autonomously. Deposit wallet keys never on server — fund movement enforced on-chain by smart contracts.",
-    "icon": "https://payram.com/icon.svg",
+    "name": "com.payram/mcp",
+    "title": "PayRam",
+    "version": "1.2.0",
+    "description": "Install, configure, operate and integrate self-hosted PayRam stablecoin and crypto payment gateways. Merchants run PayRam on their own server: no account to lock, no funds to freeze, customer data never shared, and no deposit keys on the server. Start with payram_setup_plan (install), payram_doctor (check a server), payram_runbook (admin tasks) and payram_ops_playbook (daily operations through the PayRam API). This hosted server never holds merchant credentials.",
+    "icon": "https://mcp.payram.com/favicon.png",
     "homepage": "https://mcp.payram.com",
     "documentation": "https://docs.payram.com",
     "repository": "https://github.com/PayRam/payram-mcp",
     "vendor": {
       "name": "PayRam",
       "url": "https://payram.com"
-    },
-    "license": {
-      "name": "MIT",
-      "url": "https://github.com/PayRam/payram-mcp/blob/main/LICENSE"
     }
   },
   "transport": {
     "type": "streamable-http",
     "endpoint": "https://mcp.payram.com/mcp",
-    "alternatives": [
-      { "type": "streamable-http", "endpoint": "https://mcp.payram.com/" },
-      { "type": "sse", "endpoint": "https://mcp.payram.com/mcp/sse" }
+    "protocolVersions": [
+      "2026-07-28",
+      "2025-11-25",
+      "2025-06-18",
+      "2025-03-26"
     ]
   },
   "capabilities": {
-    "tools": { "listChanged": true },
-    "resources": { "listChanged": true, "subscribe": false },
-    "prompts": { "listChanged": true },
-    "logging": {}
+    "tools": {
+      "listChanged": true
+    },
+    "resources": {
+      "listChanged": true
+    },
+    "prompts": {
+      "listChanged": true
+    }
   },
   "links": [
-    { "rel": "service-doc", "href": "https://docs.payram.com", "type": "text/html" },
-    { "rel": "related", "href": "https://payram.com/llms.txt", "type": "text/plain", "title": "LLM-friendly product summary" },
-    { "rel": "related", "href": "https://mcp.payram.com/.well-known/agent-skills/index.json", "type": "application/json", "title": "Agent Skills Index" },
-    { "rel": "related", "href": "https://payram.com/agentic", "type": "text/html", "title": "AI Agent Payment Gateway" },
-    { "rel": "related", "href": "https://payram.com/openclaw", "type": "text/html", "title": "OpenClaw + PayRam Integration" }
+    {
+      "rel": "service-doc",
+      "href": "https://docs.payram.com",
+      "type": "text/html"
+    },
+    {
+      "rel": "related",
+      "href": "https://payram.com/llms.txt",
+      "type": "text/plain",
+      "title": "LLM-friendly product summary"
+    },
+    {
+      "rel": "related",
+      "href": "https://mcp.payram.com/.well-known/agent-skills/index.json",
+      "type": "application/json",
+      "title": "Agent Skills Index"
+    },
+    {
+      "rel": "related",
+      "href": "https://payram.com/agentic",
+      "type": "text/html",
+      "title": "AI Agent Payment Gateway"
+    },
+    {
+      "rel": "related",
+      "href": "https://payram.com/openclaw",
+      "type": "text/html",
+      "title": "OpenClaw + PayRam Integration"
+    }
   ]
 }

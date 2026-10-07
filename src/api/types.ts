@@ -52,7 +52,7 @@ export interface PaymentSummaryResponse {
 /** Single entry from GET /api/v1/addresses/balance */
 /** Why the last sweep attempt failed (core: params.SweepErrorSummary). */
 export interface SweepErrorSummary {
-  statusCode: string; // e.g. HOT_WALLET_LOW_GAS, HOT_WALLET_MISSING
+  statusCode: string; // e.g. LOW_NATIVE_BALANCE, HOT_WALLET_MISSING
   category: string; // recoverable | infra
   reason: string;
   actionHint?: string; // what the merchant can do about it
@@ -60,6 +60,7 @@ export interface SweepErrorSummary {
   occurredAt: string;
   address: string;
   txHash?: string;
+  hotWalletAddress?: string; // set for gas failures: where the human sends native gas
 }
 
 export interface AddressBalanceEntry {

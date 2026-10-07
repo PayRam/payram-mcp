@@ -1,6 +1,6 @@
 ---
 name: payram-openclaw-integration
-description: Functional how-to for integrating PayRam into an OpenClaw (or NemoClaw, Claude Desktop, Copilot, n8n, LangChain, Cursor, Windsurf) agent. Register the PayRam MCP server, list discovered tools, walk through a full payment flow from create_payment → webhook → fulfilment, and debug common issues. Includes a testnet walkthrough on Base Sepolia, agent configuration for WhatsApp/Telegram/Discord bot runtimes, and patterns for subscription access grants, pay-per-request API monetization, and agent-to-agent commerce. Use when building an OpenClaw skill that needs to accept or send money, connecting an existing bot to PayRam, or troubleshooting an MCP registration that's not picking up tools.
+description: Functional how-to for integrating PayRam into an OpenClaw (or NemoClaw, Claude Desktop, Copilot, n8n, LangChain, Cursor, Windsurf) agent. Register the PayRam MCP server, list discovered tools, walk through a full payment flow from payment creation → signed webhook → fulfilment, and debug common issues. Includes a testnet walkthrough on Base Sepolia, agent configuration for WhatsApp/Telegram/Discord bot runtimes, and patterns for subscription access grants, pay-per-request API monetization (an HTTP 402 pattern built on payment links), and agent-to-agent commerce. Use when building an OpenClaw skill that needs to accept or send money, connecting an existing bot to PayRam, or troubleshooting an MCP registration that's not picking up tools.
 ---
 
 # PayRam + OpenClaw: Functional Integration Guide
@@ -23,34 +23,37 @@ Add to your OpenClaw (or any MCP-compatible client) configuration:
 
 File location by client:
 
-| Client | Config path |
-|---|---|
-| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
-| Cursor | `~/.cursor/mcp.json` |
-| Copilot | project `.vscode/mcp.json` or user settings |
-| OpenClaw | agent's `agent_config.json` or `mcp.json` |
-| n8n | MCP node → HTTP endpoint field |
+| Client                   | Config path                                                       |
+| ------------------------ | ----------------------------------------------------------------- |
+| Claude Desktop (macOS)   | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json`                     |
+| Cursor                   | `~/.cursor/mcp.json`                                              |
+| Copilot                  | project `.vscode/mcp.json` or user settings                       |
+| OpenClaw                 | agent's `agent_config.json` or `mcp.json`                         |
+| n8n                      | MCP node → HTTP endpoint field                                    |
 
-No API key is required to **connect** to the MCP server. Dashboard APIs (for analytics, auth) require JWT Bearer — see the `payram-auth` skill.
+No API key is required to **connect** to the MCP server. The hosted server **never holds your PayRam credentials**: your agent runs day-2 API calls itself via `payram_ops_playbook`, with credentials that stay on its own machine. Dashboard APIs (for analytics, auth) require JWT Bearer — see the `payram-auth` skill.
 
 ## 2. Tools the agent will discover
 
-After registering, the agent auto-discovers the PayRam MCP tools. Note these are **integration-assistant** tools — code-snippet generators and read-only data lookups — not direct money-movement actions. The agent does not hold keys or move funds itself; payment creation happens in *your* backend via the code these tools generate. (This is the NKOS property — see §6.)
+After registering, the agent auto-discovers the PayRam MCP tools. Note these are **integration-assistant** tools, such as plans, runbooks, API recipes and code-snippet generators. None of them moves money. The hosted MCP holds no keys; payment creation happens in _your_ backend via the code these tools generate.
 
-| Tool | Purpose |
-|---|---|
-| `test_payram_connection` | Verify your node URL + API key are reachable |
-| `generate_payment_sdk_snippet` / `generate_payment_http_snippet` / `generate_payment_route_snippet` | Backend code to create a payment via `POST /api/v1/payment` (fields: `customerEmail`, `customerID`, `amountInUSD`) |
-| `generate_payment_status_snippet` | Code to poll payment status by `reference_id` |
-| `generate_webhook_handler` / `generate_webhook_event_router` / `generate_mock_webhook_event` | Webhook receiver code + a mock event for testing |
-| `generate_payout_sdk_snippet` / `generate_payout_recipient_flow_snippet` / `generate_payout_status_snippet` | Outbound payout code (direct or 3-step recipient flow) |
-| `generate_referral_*` | Referral link / validation / status / route snippets |
-| `search_payments` / `lookup_payment` / `get_payment_summary` / `get_daily_volume` | Read-only payment data (JWT-scoped) |
-| `get_unswept_balances` / `list_platforms` | Read-only balances and project listing |
-| `scaffold_payram_app` / `assess_payram_project` / `generate_env_template` / `generate_setup_checklist` | Project scaffolding and setup helpers |
+| Tool                                                                                                        | Purpose                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `payram_setup_plan`                                                                                         | Start here: personalised install plan with human hand-offs                                                         |
+| `payram_doctor` / `test_payram_connection`                                                                  | Public, credential-free check of your PayRam URL (optional API-key check that creates nothing)                     |
+| `payram_runbook`                                                                                            | Admin tasks: Site URL, SSL, firewall, upgrade, backup, chains, Smart Bridge                                        |
+| `payram_ops_playbook`                                                                                       | Day-2 API recipes your agent runs itself (health, payments, unswept funds, webhooks, daily check)                  |
+| `generate_payment_sdk_snippet` / `generate_payment_http_snippet` / `generate_payment_route_snippet`         | Backend code to create a payment via `POST /api/v1/payment` (fields: `customerEmail`, `customerID`, `amountInUSD`) |
+| `generate_payment_status_snippet`                                                                           | Code to poll payment status by `reference_id`                                                                      |
+| `generate_webhook_handler` / `generate_webhook_event_router` / `generate_mock_webhook_event`                | Webhook receiver code + a mock event for testing                                                                   |
+| `generate_payout_sdk_snippet` / `generate_payout_recipient_flow_snippet` / `generate_payout_status_snippet` | Outbound payout code (direct or 3-step recipient flow)                                                             |
+| `generate_referral_*`                                                                                       | Referral link / validation / status / route snippets                                                               |
+| `scaffold_payram_app` / `generate_env_template` / `generate_setup_checklist`                                | Project scaffolding and setup helpers                                                                              |
 
-Supported currencies: `USDC`, `USDT`, `BTC`, `ETH`, `TRX` (+ `POL`/`CBBTC` for payouts). Chains: `base`, `tron`, `polygon`, `ethereum`, `bitcoin`.
+**Local mode only:** the live data tools (`search_payments`, `lookup_payment`, `get_payment_summary`, `get_daily_volume`, `get_unswept_balances`, `list_platforms`, `create_payment_link`, `check_node_sync`, `restart_payram_worker`, …) and `assess_payram_project` exist only when you run the MCP yourself next to your PayRam (`PAYRAM_MCP_MODE=local`, credentials in its `PAYRAM_*` env).
+
+Supported currencies: `USDC`, `USDT`, `BTC`, `ETH`, `TRX`, `POL`, `CBBTC`, `PYUSD` (per chain). Native chains (codes are uppercase in the API): `BASE`, `ETH`, `POLYGON`, `TRX`, `BTC`. Customers can also pay on Solana, Bitcoin, Tron-USDT and BNB Chain via **Smart Bridge**, and you settle as USDC on Base.
 
 ## 3. Full payment flow
 
@@ -62,54 +65,63 @@ Agent → generate_payment_sdk_snippet → drop the code into your backend
 Your backend → POST {payram}/api/v1/payment
                Headers: API-Key: <merchant key>
                Body: { customerEmail, customerID, amountInUSD: 25.00 }
-            ← { url: 'https://pay.payram.com/…', reference_id: 'ref_abc', host: '…' }
+            ← { url: 'https://pay.example.com/payments?reference_id=…', reference_id: '…', host: '…' }
 
 Agent → [sends url (or QR) to the customer in-chat]
 
 [Customer pays — crypto directly OR card-to-crypto]
 
 PayRam → POST https://your-webhook.example.com/
-         Headers: API-Key: <webhook shared secret>
-         Body: { reference_id: 'ref_abc', status: 'FILLED', amount: 25.00,
-                 filled_amount_in_usd: 25.00, currency: 'USD' }
+         Headers: X-Payram-Signature: sha256=<HMAC-SHA256(raw body, project API key)>
+                  API-KEY: <project API key>   (legacy)
+         Body: { reference_id: '…', status: 'FILLED', amount: '25.00',
+                 filled_amount_in_usd: '25.00', currency: 'USD' }
 
-Your webhook handler → [fulfils: grants access / ships / etc]
+Your webhook handler → [verifies the signature over the raw body]
+                     → [fulfils: grants access / ships / etc]
                      → responds 2xx (acknowledges webhook)
 ```
 
 Webhook retry schedule if you don't 2xx: **30m, 1h, 2h, 4h, 8h, 24h, 48h**.
 
-Webhook `status` values: `OPEN`, `PARTIALLY_FILLED`, `FILLED`, `OVER_FILLED`, `CANCELLED`, `UNDEFINED`. Fulfil on `FILLED` (and decide a policy for `OVER_FILLED`/`PARTIALLY_FILLED`). The webhook authenticates with an `API-Key` shared-secret header — there is no HMAC `X-PayRam-Signature`. See `payram-webhook-integration` for handler code.
+Webhook `status` values: `OPEN`, `PARTIALLY_FILLED`, `FILLED`, `OVER_FILLED`, `CANCELLED`, `UNDEFINED`. Fulfil on `FILLED` (and decide a policy for `OVER_FILLED`/`PARTIALLY_FILLED`).
+
+- **Signing:** every webhook is signed. `X-Payram-Signature` is `sha256=` plus the hex HMAC-SHA256 of the raw body, keyed with the project API key (the newest active one). There is no separate webhook secret.
+- **Verify:** compute the HMAC over the raw body and compare in constant time.
+- **Amounts:** they are decimal strings.
+- **Payout ping:** answer the unsigned ping (`X-Webhook-Test: true`) with 200.
+
+See `payram-webhook-integration` for handler code.
 
 ## 4. Testnet walkthrough (Base Sepolia)
 
-The demo MCP server (`mcp.payram.com/mcp`) connects to a shared testnet. For your own testnet node:
+The hosted MCP (`mcp.payram.com/mcp`) has no PayRam instance or test network behind it. You run your own testnet node (call `payram_setup_plan` with `network: "testnet"` for the full plan):
 
-1. **Deploy PayRam in agent mode:**
-   ```
-   bash <(curl -fsSL https://payram.com/setup_payram_agents.sh)
-   ```
-   Pick `base-sepolia` when prompted.
+1. **Deploy PayRam in agent mode** (the first install needs an interactive terminal, e.g. `ssh -t`; the installer default is mainnet, so pass the flag):
 
-2. **Fund the deployer wallet:** PayRam shows an address. Fund it with test ETH from:
-   - Google Cloud Faucet (no account required, recommended)
-   - Alchemy Base Sepolia faucet
-   - QuickNode multi-chain faucet
-   - PayRam faucet (limited)
+   ```
+   bash <(curl -fsSL https://payram.com/setup_payram_agents.sh) --testnet --skip-mcp-server
+   ```
 
-3. **Deploy the sweep smart contract:**
-   ```
-   ./setup_payram_agents.sh deploy-scw-flow
-   ```
-   Generates a mnemonic, shows the deployer address, waits for funds, deploys the contract.
+   The default flow deploys the smart-contract deposit wallet on Base (Base Sepolia on testnet).
+
+2. **Fund the deployer wallet:** PayRam shows an address and waits. Fund it with Base Sepolia ETH from:
+   - https://www.alchemy.com/faucets/base-sepolia
+   - https://faucet.quicknode.com/base/sepolia
+
+   The flow then deploys the contract. If you stopped it, re-run the same command; the step is resumable. (Run standalone, `deploy-scw-flow` defaults to Ethereum, so set `PAYRAM_BLOCKCHAIN_CODE=BASE` if you use it directly.)
+
+3. **Human hand-off:** hand the root credentials (`~/.payraminfo/root-credentials.env`) to the human. They save **Settings → Site URL** from the public domain; until then, links point at `http://localhost`.
 
 4. **Create a test payment link:**
+
    ```
-   ./setup_payram_agents.sh create-payment-link
+   bash <(curl -fsSL https://payram.com/setup_payram_agents.sh) create-payment-link
    ```
+
    Produces a URL you can open in a browser and pay from a Base Sepolia wallet (MetaMask configured for the network).
 
-5. **Watch logs:** Tail the PayRam node logs. You should see the block-listener detect the deposit, move through `Confirming → Confirmed`, and fire the webhook.
+5. **Watch logs:** tail `~/.payram-core/log/` (e.g. `deposit_processor.log`, `webhook_processor.log`); `docker logs payram` shows only startup output. You should see the listener detect the deposit, move through `Confirming → Confirmed`, and fire the webhook.
 
 ## 5. Agent-runtime integration patterns
 
@@ -129,22 +141,38 @@ Use `discord.js`. On the `FILLED` webhook, call `GuildMember.roles.add(premiumRo
 
 Use the MCP node → point at `https://mcp.payram.com/mcp` → call tools as actions. Wire the webhook to an HTTP trigger node.
 
-### Agent-to-agent (x402-style)
+### Agent-to-agent (HTTP 402 pattern on payment links)
+
+PayRam does not implement the x402 protocol. You can still build a pay-per-request flow on ordinary PayRam payment links:
 
 ```python
-# Seller agent exposes an HTTP 402 endpoint
+# Seller backend: answer 402 with a PayRam payment link, serve once it is FILLED
+import os, httpx
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+PAYRAM = os.environ['PAYRAM_BASE_URL']
+HEADERS = {'API-Key': os.environ['PAYRAM_API_KEY']}  # server-side only
+
 @app.get('/data/{query}')
-async def data(query, request):
-    auth = request.headers.get('x-payment')
-    if not auth or not await verify_payment(auth, amount=0.002, chain='base', token='USDC'):
-        return Response(
-            status_code=402,
-            headers={'accept-payment': 'usdc-base:0.002'}
-        )
-    return await fetch_data(query)
+async def data(query: str, request: Request):
+    ref = request.headers.get('x-payram-reference')
+    if ref:
+        async with httpx.AsyncClient() as c:
+            r = await c.get(f'{PAYRAM}/api/v1/payment/reference/{ref}', headers=HEADERS)
+        if r.status_code == 200 and r.json().get('paymentState') == 'FILLED' and not already_used(ref):
+            mark_used(ref)  # one reference buys one response
+            return await fetch_data(query)
+
+    buyer_id = request.headers.get('x-buyer-id', 'anonymous-agent')
+    async with httpx.AsyncClient() as c:
+        r = await c.post(f'{PAYRAM}/api/v1/payment', headers=HEADERS,
+                         json={'customerID': buyer_id, 'customerEmail': 'agent@example.com', 'amountInUSD': 1})
+    link = r.json()
+    return JSONResponse(status_code=402, content={'payment_url': link['url'], 'reference_id': link['reference_id']})
 ```
 
-The buyer agent's HTTP client handles the 402, calls `create_payment`, pays, resubmits with the payment proof in `x-payment`.
+The buyer agent receives the 402, pays the `payment_url`, then retries with `x-payram-reference: <reference_id>`. Creating a payment cancels that customer's other open payments, so give each buyer its own customer id.
 
 ## 6. Debugging
 
@@ -153,24 +181,27 @@ The buyer agent's HTTP client handles the 402, calls `create_payment`, pays, res
 - Verify MCP config path is correct for your client
 - Restart the client (Claude Desktop needs full restart after config changes)
 - Check the MCP server is reachable: `curl https://mcp.payram.com/healthz` → `{ ok: true }`
-- Check you didn't set a body or wrong URL — it's a GET-less JSON-RPC streamable-HTTP endpoint; the client handles the protocol
+- Use `https://mcp.payram.com/mcp` (Streamable HTTP). There is no SSE endpoint, and `/mcp/sse` returns 410. The client handles the protocol.
 
-**`create_payment` returns but webhook never fires**
+**Payment is created but the webhook never fires**
 
 - Check the webhook URL in your PayRam dashboard — must be reachable from the internet (not `localhost`)
 - Use `ngrok http 3000` for local dev, set the ngrok URL as webhook
 - Check the webhook handler returns 2xx; non-2xx triggers the retry schedule
+- Check your handler verifies `X-Payram-Signature` with the project's **newest active** API key; a different key rejects every delivery
 - Test manually: in PayRam dashboard, use "Resend webhook" on a confirmed payment
 
 **Payment shown as Confirming forever**
 
 - Confirmation threshold configured too high for the chain
-- Chain listener worker not running — check `supervisorctl status` on your PayRam node
-- RPC provider down — check your `.env` for RPC URLs
+- Chain listener worker not running — `docker exec payram supervisorctl status`, or `payram_ops_playbook` tasks `workers` / `node_sync`
+- RPC provider down — check the node settings for that chain
 
-**`send_payment` fails with "no signer"**
+**Payouts: who can send money**
 
-- Payouts require the cold-wallet signer. On a fully autonomous agent node you cannot sign without hardware interaction. This is intentional — it's the NKOS property. For scheduled/automated payouts, use a small gas-only hot wallet for gas, and sign the payout batch from a hardware wallet on a schedule.
+- EVM and Tron payouts are signed by the project **hot wallet** on the server, not by the cold wallet. Any holder of the project API key can request one, and payouts under the project's auto-approve limit go out without a human.
+- Keep the hot wallet balance small, review the payout approval settings, and never give an autonomous agent a key it doesn't need.
+- BTC payouts are not supported. Creating or approving payouts is a human decision.
 
 ## 7. See also
 

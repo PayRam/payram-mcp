@@ -13,13 +13,13 @@ Crypto payments are approximate by nature. A customer paying a $50 invoice may s
 
 The top-up pattern flips it: **whatever arrives is credited to the user's wallet balance — exactly the amount received. Invoices are then debited from the balance as a plain, atomic app-side operation.** Every crypto quirk becomes a balance state, not a payment failure:
 
-| Crypto reality | Direct-to-invoice | Top-up wallet |
-|---|---|---|
-| Overpayment (OVER_FILLED) | Refund flow needed | Excess stays as balance for next invoice |
-| Underpayment (PARTIALLY_FILLED) | Failed payment, retry whole amount | Balance credited; top up just the difference |
-| Two partial sends | Manual matching | Both credit; invoice settles when balance suffices |
-| Late payment after "expiry" | Orphaned funds | Still credited; user spends it normally |
-| Refund requested | On-chain refund per payment | App-side reversal entry (+ PayRam payout only if crypto must leave) |
+| Crypto reality                  | Direct-to-invoice                  | Top-up wallet                                                       |
+| ------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
+| Overpayment (OVER_FILLED)       | Refund flow needed                 | Excess stays as balance for next invoice                            |
+| Underpayment (PARTIALLY_FILLED) | Failed payment, retry whole amount | Balance credited; top up just the difference                        |
+| Two partial sends               | Manual matching                    | Both credit; invoice settles when balance suffices                  |
+| Late payment after "expiry"     | Orphaned funds                     | Still credited; user spends it normally                             |
+| Refund requested                | On-chain refund per payment        | App-side reversal entry (+ PayRam payout only if crypto must leave) |
 
 ## Architecture: the ledger
 
@@ -83,6 +83,7 @@ This one function absorbs duplicates (delta ≤ 0), out-of-order delivery, parti
 ## The flows
 
 ### Flow A — invoice settlement (spend from balance)
+
 ```
 create invoice → BEGIN; SELECT balance FROM user_wallets WHERE user_id=? FOR UPDATE;
   if balance >= invoice.amount:
@@ -90,50 +91,61 @@ create invoice → BEGIN; SELECT balance FROM user_wallets WHERE user_id=? FOR U
   else:
       invoice.status='awaiting_funds'; COMMIT → go to Flow B for the shortfall
 ```
+
 `FOR UPDATE` (or SERIALIZABLE) makes concurrent debits of one wallet safe — the balance check and the debit are one atomic unit.
 
 ### Flow B — top-up (get funds in)
+
 ```
 shortfall = invoice.amount - balance
 POST {payram}/api/v1/payment  (API-Key header)
   { customerEmail, customerID: "<your user_id>", amountInUSD: shortfall, invoiceID: "<your invoice id>" }
 → show returned url to the user
 ```
+
 - `customerID` = **your user id** — it's how the webhook maps back to the wallet.
 - `invoiceID` is optional metadata; the ledger does NOT rely on it (credits are wallet-level).
 - Ask for the shortfall, not the full invoice — existing balance already counts.
+- Creating a payment **cancels that customer's other open payments** in the project. Reuse the user's open link while it is still valid, rather than minting a new one on every page view.
+- Create the link on your server; the project API key can also create payouts, so it never goes to the browser.
 
 ### Flow C — the credit webhook (funds arrived)
-Register your webhook in the PayRam project. PayRam POSTs snake_case JSON with an `API-Key` header equal to your configured shared secret — verify it with a constant-time compare. Then run the cumulative-credit logic above, then re-attempt Flow A for any `awaiting_funds` invoices of that user.
+
+Register your webhook in the PayRam project (Project → Webhooks). PayRam POSTs snake_case JSON with amounts as **decimal strings**, and signs every delivery.
+
+1. **Ping:** if the request carries `X-Webhook-Test: true`, it is an unsigned payout ping. Answer 200 and stop.
+2. **Verify:** check the `X-Payram-Signature: sha256=<hex HMAC-SHA256 of the raw body>` header, keyed with your **project API key** (the newest active one; there is no separate webhook secret). Compute the HMAC over the raw request bytes and compare in constant time.
+3. **Credit:** parse the body, run the cumulative-credit logic above, then re-attempt Flow A for any `awaiting_funds` invoices of that user.
 
 ### Flow D — refunds & cancellations
+
 - App-level refund (user keeps money in your app): insert `debit_reversal` for the invoice → balance goes back up. No crypto moves.
 - Crypto must actually leave: pay out via PayRam's payout flow (see `payram-payouts`) AND insert a matching `debit` (memo: refund payout) so the ledger mirrors reality.
 
 ## Case matrix (all of them)
 
-| # | Case | What happens |
-|---|---|---|
-| 1 | Exact payment | credit = invoice → Flow A settles immediately |
-| 2 | Overpayment | credit > invoice → invoice paid, excess remains as balance |
-| 3 | Underpayment | credit < invoice → invoice `awaiting_funds`; UI offers top-up link for shortfall |
-| 4 | Multiple sends, one reference | cumulative webhooks → base credit + adjustments; settles when total suffices |
-| 5 | Multiple separate top-ups | independent references → independent credits; balance accumulates |
-| 6 | Late payment ("expired" link) | funds still arrive on-chain → webhook still fires → normal credit |
-| 7 | Duplicate webhook delivery | delta ≤ 0 → ignored (retry-safe by construction) |
-| 8 | Out-of-order webhooks | cumulative math is order-independent |
-| 9 | Concurrent invoice debits | row lock in Flow A serializes them; CHECK (balance >= 0) is the backstop |
-| 10 | Refund | reversal entry (app-level) or payout + debit (crypto leaves) |
-| 11 | Reconciliation drift | nightly job: PayRam payment search (sum filled_amount_in_usd per reference) vs ledger credits — must match to the cent |
+| #   | Case                          | What happens                                                                                                           |
+| --- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1   | Exact payment                 | credit = invoice → Flow A settles immediately                                                                          |
+| 2   | Overpayment                   | credit > invoice → invoice paid, excess remains as balance                                                             |
+| 3   | Underpayment                  | credit < invoice → invoice `awaiting_funds`; UI offers top-up link for shortfall                                       |
+| 4   | Multiple sends, one reference | cumulative webhooks → base credit + adjustments; settles when total suffices                                           |
+| 5   | Multiple separate top-ups     | independent references → independent credits; balance accumulates                                                      |
+| 6   | Late payment ("expired" link) | funds still arrive on-chain → webhook still fires → normal credit                                                      |
+| 7   | Duplicate webhook delivery    | delta ≤ 0 → ignored (retry-safe by construction)                                                                       |
+| 8   | Out-of-order webhooks         | cumulative math is order-independent                                                                                   |
+| 9   | Concurrent invoice debits     | row lock in Flow A serializes them; CHECK (balance >= 0) is the backstop                                               |
+| 10  | Refund                        | reversal entry (app-level) or payout + debit (crypto leaves)                                                           |
+| 11  | Reconciliation drift          | nightly job: PayRam payment search (sum filled_amount_in_usd per reference) vs ledger credits — must match to the cent |
 
 ## PayRam API surface you use
 
-| Purpose | Call | Auth |
-|---|---|---|
-| Create top-up link | `POST /api/v1/payment` `{customerEmail, customerID, amountInUSD, invoiceID?}` | `API-Key` header |
-| Check one payment | `GET /api/v1/payment/reference/{reference_id}` | reference acts as capability |
-| Credit webhook (inbound) | your endpoint receives `{reference_id, customer_id, status, filled_amount_in_usd, ...}` | verify `API-Key` shared secret |
-| Reconciliation | `POST /api/v1/external-platform/{id}/payment/search` (JWT) | dashboard JWT |
+| Purpose                  | Call                                                                                    | Auth                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Create top-up link       | `POST /api/v1/payment` `{customerEmail, customerID, amountInUSD, invoiceID?}`           | `API-Key` header                                                       |
+| Check one payment        | `GET /api/v1/payment/reference/{reference_id}`                                          | reference acts as capability                                           |
+| Credit webhook (inbound) | your endpoint receives `{reference_id, customer_id, status, filled_amount_in_usd, ...}` | verify `X-Payram-Signature` (HMAC-SHA256 of raw body, project API key) |
+| Reconciliation           | `POST /api/v1/external-platform/{id}/payment/search` (JWT)                              | dashboard JWT                                                          |
 
 Statuses that credit: `PARTIALLY_FILLED`, `FILLED`, `OVER_FILLED`. Ignore `OPEN`; treat `CANCELLED` as informational (no funds → no credit).
 
@@ -143,8 +155,8 @@ The MCP tool `generate_topup_integration_snippet` emits the ledger SQL, the cumu
 
 ## Rollout checklist
 
-1. Create the three tables; wire the webhook endpoint (verify shared secret, constant-time).
+1. Create the three tables; wire the webhook endpoint (verify `X-Payram-Signature` over the raw body, constant-time; ack the payout ping).
 2. Implement cumulative credit + atomic settle (use the generator).
 3. Point a test invoice at testnet, pay the link partially, verify `awaiting_funds` → top up → `paid`.
 4. Add the nightly reconciliation query before going to mainnet.
-5. Go live; monitor `check_node_sync` — a lagging chain delays credits, not correctness.
+5. Go live; monitor node sync (`payram_ops_playbook` task `node_sync`, or `check_node_sync` in local mode). A lagging chain delays credits, not correctness.

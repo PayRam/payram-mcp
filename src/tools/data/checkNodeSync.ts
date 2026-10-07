@@ -1,13 +1,10 @@
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
+import { CONTAINER, RESTARTABLE_WORKERS, isProgramDown } from '../../facts/payram.js';
 import { logger } from '../../utils/logger.js';
 import { buildToolSchemas } from '../common/schemas.js';
 import { safeHandler } from '../common/errors.js';
-import {
-  getWorkersStatus,
-  getBlockchains,
-  testBlockchainConnection,
-} from '../../api/payramApi.js';
+import { getWorkersStatus, getBlockchains, testBlockchainConnection } from '../../api/payramApi.js';
 import type { NodeHealth, WorkerStatus } from '../../api/types.js';
 
 /**
@@ -23,8 +20,7 @@ const staleThresholdSeconds = (chainCode: string): number =>
   chainCode.toUpperCase() === 'BTC' ? STALE_SECONDS_BTC : STALE_SECONDS_DEFAULT;
 
 /** Listener worker name convention in payram-core: `<lower-chain>-listener`. */
-const listenerWorkerFor = (chainCode: string): string =>
-  `${chainCode.toLowerCase()}-listener`;
+const listenerWorkerFor = (chainCode: string): string => `${chainCode.toLowerCase()}-listener`;
 
 const nodeReportSchema = z
   .object({
@@ -202,12 +198,15 @@ export const registerCheckNodeSyncTool = (server: McpServer) => {
         }
         const orphanWorkersDown = workers.filter(
           (w) =>
-            w.status.toUpperCase() !== 'RUNNING' &&
+            isProgramDown(w.name, w.status) &&
             !chains.some((c) => c.listenerWorker === w.name.toLowerCase()),
         );
         for (const w of orphanWorkersDown) {
+          const restartable = (RESTARTABLE_WORKERS as readonly string[]).includes(w.name);
           issues.push(
-            `worker '${w.name}' is ${w.status} — Remediation: restart_payram_worker {"worker": "${w.name}"}.`,
+            restartable
+              ? `worker '${w.name}' is ${w.status} — Remediation: restart_payram_worker {"worker": "${w.name}"}.`
+              : `'${w.name}' is ${w.status} — not restartable via the API; on the server: ${CONTAINER.supervisorctl} and \`docker exec ${CONTAINER.name} supervisorctl restart ${w.name}\` (with the human's OK).`,
           );
         }
 

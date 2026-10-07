@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { logger } from '../../../utils/logger.js';
 import { safeHandler } from '../../common/errors.js';
@@ -88,7 +88,7 @@ const formatSnippetResponse = (snippet: SnippetResponse, message: string) => ({
 });
 
 export const registerReferralTools = (server: McpServer) => {
-  logger.info('Registering referral tools...');
+  logger.debug('Registering referral tools...');
 
   server.registerTool(
     'generate_referral_sdk_snippet',

@@ -2,12 +2,7 @@
 // If that spec changes, update it first and then refresh these templates.
 
 export type PayramWebhookStatus =
-  | 'OPEN'
-  | 'CANCELLED'
-  | 'FILLED'
-  | 'PARTIALLY_FILLED'
-  | 'OVER_FILLED'
-  | 'UNDEFINED';
+  'OPEN' | 'CANCELLED' | 'FILLED' | 'PARTIALLY_FILLED' | 'OVER_FILLED' | 'UNDEFINED';
 
 export interface PayramWebhookPayload {
   reference_id: string;

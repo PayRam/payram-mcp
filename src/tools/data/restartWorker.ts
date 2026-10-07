@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { logger } from '../../utils/logger.js';
 import { buildToolSchemas } from '../common/schemas.js';
 import { safeHandler } from '../common/errors.js';

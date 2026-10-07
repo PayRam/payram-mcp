@@ -347,7 +347,7 @@ async function fetchAllDocs(): Promise<void> {
 
       // Small delay to avoid overwhelming the server
       await new Promise((resolve) => setTimeout(resolve, 100));
-    } catch (error) {
+    } catch {
       console.error(`✗ Failed to fetch ${docPage.path}`);
       failCount++;
     }
