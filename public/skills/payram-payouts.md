@@ -1,6 +1,6 @@
 ---
 name: payram-payouts
-description: Send crypto payouts and manage referral programs with PayRam. Self-hosted payout infrastructure — no KYC, no intermediary, no fund holds. Create payouts to any wallet across Ethereum, Base, Polygon, Tron, Bitcoin. Built-in affiliate program with automated reward distribution. Use when sending crypto payouts to users, building referral/affiliate programs, or needing integrated payment and payout infrastructure.
+description: Send crypto payouts and manage referral programs with PayRam. Self-hosted payout infrastructure — no KYC, no intermediary, no fund holds. Create payouts to any wallet on Ethereum, Base, Polygon and Tron. Built-in affiliate program with automated reward distribution. Use when sending crypto payouts to users, building referral/affiliate programs, or needing integrated payment and payout infrastructure.
 ---
 
 # PayRam Payouts & Referrals
@@ -39,10 +39,10 @@ Payouts progress through these states:
 
 PayRam offers two payout flows (see `merchant-payouts-api.md` in payram-core for the full contract):
 
-| Flow | When to use | OTP? | Endpoints |
-| ---- | ----------- | ---- | --------- |
+| Flow                              | When to use                                                                   | OTP?                     | Endpoints                                                                                                     |
+| --------------------------------- | ----------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | **Saved recipient (recommended)** | Repeat payments to the same beneficiary; you want an OTP-verified audit trail | Yes (once per recipient) | `POST /api/v1/recipients` → `POST /api/v1/otp/validate` → `POST /api/v1/project/{projectID}/admin/withdrawal` |
-| **Direct (single-shot)** | One-off payouts (refunds, ad-hoc disbursements) | No | `POST /api/v1/withdrawal/merchant` |
+| **Direct (single-shot)**          | One-off payouts (refunds, ad-hoc disbursements)                               | No                       | `POST /api/v1/withdrawal/merchant`                                                                            |
 
 Both flows authenticate with the **`API-Key`** header (a Merchant API key scoped to one project) — never `Authorization: Bearer`.
 
@@ -73,7 +73,7 @@ const { recipient } = await call<{ recipient: { id: number; status: string } }>(
   {
     name: 'Acme Supplier Ltd',
     email: 'supplier@acme.example',
-    blockchainCode: 'ethereum', // lowercase chain name: ethereum | bitcoin | tron | base | polygon
+    blockchainCode: 'ETH', // UPPERCASE chain code: ETH | BASE | POLYGON | TRX (no BTC payouts)
     address: '0xAbCdEf0123456789AbCdEf0123456789AbCdEf01',
     projectIDs: [PROJECT_ID], // required, min 1
   },
@@ -92,7 +92,7 @@ const withdrawal = await call<{ id: number; status: string }>(
   'POST',
   `/project/${PROJECT_ID}/admin/withdrawal`,
   {
-    currencyCode: 'ETH', // uppercase ticker: ETH | BTC | USDC | USDT | POL | TRX | CBBTC
+    currencyCode: 'ETH', // uppercase ticker valid on the recipient's chain (see Supported Payout Chains)
     amount: '0.05', // decimal string
     recipientID: recipient.id, // must be "active"
   },
@@ -111,7 +111,9 @@ const payram = new Payram({
   baseUrl: process.env.PAYRAM_BASE_URL!,
   config: {
     timeoutMs: 10_000,
-    maxRetries: 2,
+    // Never auto-retry a payout POST: the SDK cannot send an Idempotency-Key,
+    // so a retry can create a second payout (or a 409 on newer cores).
+    maxRetries: 0,
   },
 });
 
@@ -141,7 +143,7 @@ export async function createPayout(payload: CreatePayoutRequest): Promise<Mercha
 // Example invocation (direct payout → POST /api/v1/withdrawal/merchant)
 await createPayout({
   email: 'merchant@example.com',
-  blockchainCode: 'ethereum', // lowercase chain name, NOT a ticker
+  blockchainCode: 'ETH', // UPPERCASE chain code (ETH | BASE | POLYGON | TRX), NOT a ticker
   currencyCode: 'USDC',
   amount: '125.50', // MUST be string, not number
   toAddress: '0xfeedfacecafebeefdeadbeefdeadbeefdeadbeef',
@@ -153,18 +155,20 @@ await createPayout({
 
 ### Payout Fields
 
-| Field                | Type       | Notes                                            |
-| -------------------- | ---------- | ------------------------------------------------ |
-| `email`              | string     | Merchant email associated with payout            |
-| `blockchainCode`     | string     | **Lowercase chain name**: `ethereum`, `bitcoin`, `tron`, `base`, `polygon` |
-| `currencyCode`       | string     | **Uppercase ticker**: `ETH`, `BTC`, `USDC`, `USDT`, `POL`, `TRX`, `CBBTC`   |
-| `amount`             | **string** | Amount as string (e.g., '125.50'). NOT a number. |
-| `toAddress`          | string     | Recipient wallet address                         |
-| `customerID`         | string     | Your internal reference ID                       |
-| `mobileNumber`       | string     | Optional. E.164 format: +15555555555             |
-| `residentialAddress` | string     | Optional. Recipient address (compliance)         |
+| Field                | Type       | Notes                                                                                           |
+| -------------------- | ---------- | ----------------------------------------------------------------------------------------------- |
+| `email`              | string     | Merchant email associated with payout                                                           |
+| `blockchainCode`     | string     | **Uppercase chain code**: `ETH`, `BASE`, `POLYGON`, `TRX` (BTC payouts are not supported)       |
+| `currencyCode`       | string     | **Uppercase ticker** valid on that chain: `ETH`, `USDC`, `USDT`, `POL`, `TRX`, `CBBTC`, `PYUSD` |
+| `amount`             | **string** | Amount as string (e.g., '125.50'). NOT a number.                                                |
+| `toAddress`          | string     | Recipient wallet address                                                                        |
+| `customerID`         | string     | Your internal reference ID                                                                      |
+| `mobileNumber`       | string     | Optional. E.164 format: +15555555555                                                            |
+| `residentialAddress` | string     | Optional. Recipient address (compliance)                                                        |
 
 **Critical:** Amount must be a string. JavaScript numbers lose precision with decimals.
+
+**Retries and idempotency:** the REST endpoint `POST /api/v1/withdrawal/merchant` accepts an `Idempotency-Key` header (core 3.6+; a duplicate within 5 minutes returns 409). If you need retries, call it directly with that header instead of relying on SDK retries.
 
 ### Check Payout Status
 
@@ -187,13 +191,12 @@ Always validate recipient addresses before creating payouts:
 
 ```typescript
 function validateAddress(address: string, blockchainCode: string): boolean {
-  // Keyed by the lowercase blockchainCode values the payout API expects.
+  // Keyed by the UPPERCASE blockchainCode values the payout API expects.
   const patterns: Record<string, RegExp> = {
-    ethereum: /^0x[a-fA-F0-9]{40}$/,
-    base: /^0x[a-fA-F0-9]{40}$/,
-    polygon: /^0x[a-fA-F0-9]{40}$/,
-    bitcoin: /^(?:[13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-z0-9]{39,59})$/,
-    tron: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
+    ETH: /^0x[a-fA-F0-9]{40}$/,
+    BASE: /^0x[a-fA-F0-9]{40}$/,
+    POLYGON: /^0x[a-fA-F0-9]{40}$/,
+    TRX: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
   };
   const pattern = patterns[blockchainCode];
   return pattern ? pattern.test(address) : false;
@@ -223,7 +226,9 @@ CREATE TABLE payouts (
 **Express.js Route:**
 
 ```typescript
-router.post('/api/payouts/payram', async (req, res) => {
+// This route moves money. Mount it ONLY behind your own admin authentication
+// (never public, no open CORS), and prefer an allowlist of recipient addresses.
+router.post('/api/payouts/payram', requireAdmin, express.json(), async (req, res) => {
   const payload = req.body as Partial<CreatePayoutRequest>;
   const requiredFields = [
     'email',
@@ -256,17 +261,24 @@ router.post('/api/payouts/payram', async (req, res) => {
 
 ### Supported Payout Chains
 
-Same chains as deposits: Ethereum, Base, Polygon, Tron, Bitcoin.
+| `blockchainCode` | Valid `currencyCode` values   |
+| ---------------- | ----------------------------- |
+| `ETH`            | ETH, USDC, USDT, CBBTC, PYUSD |
+| `BASE`           | USDC, ETH, CBBTC              |
+| `POLYGON`        | POL, USDC, USDT               |
+| `TRX`            | TRX, USDT                     |
+
+BTC payouts are not supported. EVM and Tron payouts are signed by the project hot wallet, which needs native gas on that chain. Payouts under the project's auto-approve limit go out without a human, so review the payout settings.
 
 **Recommendation**: Use Polygon or Tron for high-volume, low-value payouts (lowest fees).
 
 ### MCP Server Tools
 
-| Tool                                       | Purpose                                          |
-| ------------------------------------------ | ------------------------------------------------ |
-| `generate_payout_sdk_snippet`              | Direct (no-OTP) payout creation code             |
-| `generate_payout_recipient_flow_snippet`   | 3-step recipient flow (create → OTP → pay out)   |
-| `generate_payout_status_snippet`           | Status polling code                              |
+| Tool                                     | Purpose                                        |
+| ---------------------------------------- | ---------------------------------------------- |
+| `generate_payout_sdk_snippet`            | Direct (no-OTP) payout creation code           |
+| `generate_payout_recipient_flow_snippet` | 3-step recipient flow (create → OTP → pay out) |
+| `generate_payout_status_snippet`         | Status polling code                            |
 
 ## Referral Program
 
@@ -333,7 +345,11 @@ Check merchant balance, deposit funds, account for gas fees.
 
 ### "Invalid address format" (400)
 
-ETH/Polygon: `0x` + 40 hex chars. BTC: starts with `1`/`3` (legacy) or `bc1` (Bech32), 26-62 chars.
+ETH/Base/Polygon: `0x` + 40 hex chars. Tron: starts with `T`, 34 chars. (BTC addresses cannot be paid out.)
+
+### Payout rejected for the chain
+
+`blockchainCode` must be the uppercase chain code (`ETH`, `BASE`, `POLYGON`, `TRX`). Lowercase names such as `ethereum` are not matched.
 
 ### Amount must be string
 
@@ -362,7 +378,7 @@ PAYRAM_API_KEY=your-api-key
 | Skill                                | What it covers                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------- |
 | `payram-setup`                       | Server config, API keys, wallet setup, connectivity test                  |
-| `payram-agent-onboarding`            | Agent onboarding — CLI-only deployment for AI agents, no web UI           |
+| `payram-agent-onboarding`            | Headless install and the agent CLI for AI agents                          |
 | `payram-analytics`                   | Analytics dashboards, reports, and payment insights via MCP tools         |
 | `payram-crypto-payments`             | Architecture overview, why PayRam, MCP tools                              |
 | `payram-payment-integration`         | Quick-start payment integration guide                                     |

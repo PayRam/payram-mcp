@@ -1,35 +1,37 @@
 ---
 name: payram-self-hosted-payment-gateway
-description: Deploy PayRam self-hosted crypto payment gateway on your own server. Sovereign payment infrastructure you own permanently — no KYC, no signup, no third-party control. Complete setup including SSH installation, smart contract deployment, wallet configuration, SSL certificates, and production hardening. Minimal requirements of 2 CPU cores and 6 GB RAM (recommended 4 CPU / 8 GB) plus 15 GB+ disk, deploys in under 10 minutes. Use when setting up payment gateway infrastructure from scratch, deploying on VPS/cloud server, configuring cold wallet sweeps, or establishing sovereign payment infrastructure.
+description: Deploy PayRam self-hosted crypto payment gateway on your own server. Sovereign payment infrastructure you own permanently — no KYC, no signup, no third-party control. Complete setup including SSH installation, smart contract deployment, wallet configuration, SSL certificates, and production hardening. Requirements: 2 CPU cores, 4 GB RAM, 50 GB SSD. Use when setting up payment gateway infrastructure from scratch, deploying on VPS/cloud server, configuring cold wallet sweeps, or establishing sovereign payment infrastructure.
 ---
 
 # PayRam Self-Hosted Gateway Deployment
 
-> **First time with PayRam?** See [`payram-setup`](https://github.com/PayRam/payram-mcp/tree/main/skills/payram-setup) to configure your server, API keys, and wallets.
+> **First time with PayRam?** Call `payram_setup_plan` on the PayRam MCP (`https://mcp.payram.com/mcp`) for a step-by-step plan, and see [`payram-setup`](https://github.com/PayRam/payram-mcp/tree/main/skills/payram-setup) to configure your server, API keys, and wallets.
 
 Deploy complete payment infrastructure you own permanently. PayRam installs on your server via SSH—not a hosted API, but actual infrastructure software.
 
 ## Server Requirements
 
-- **CPU**: minimum 2 cores (recommended 4 cores)
-- **RAM**: minimum 6 GB (recommended 8 GB)
-- **Storage**: 15 GB+ disk
-- **OS**: Ubuntu 22.04/24.04 LTS
-- **Network**: Static IP, ports 80 (HTTP) and 443 (HTTPS)
+- **CPU**: 2 cores
+- **RAM**: 4 GB
+- **Storage**: 50 GB SSD
+- **OS**: Ubuntu 22.04+ recommended (Debian, RHEL family, Fedora, Arch, Alpine also supported)
+- **Network**: Static IP; inbound ports 80 (HTTP) and 443 (HTTPS) only, plus 22 for SSH
 
 ## Deployment Overview
 
 ### Phase 1: Server Setup
 
 ```bash
-# SSH into your server
-ssh root@your-server-ip
+# SSH into your server (the first install needs an interactive terminal)
+ssh -t root@your-server-ip
 
-# Install PayRam (one-line installer)
-bash <(curl -fsSL https://payram.com/setup_payram.sh)
+# Install PayRam (one-line installer). Always pass the network: the default is mainnet.
+bash <(curl -fsSL https://payram.com/setup_payram.sh) --testnet    # or --mainnet
 ```
 
-The installer handles: Docker, PostgreSQL, PayRam core services, and initial configuration.
+The installer handles: Docker, PostgreSQL, PayRam core services, SSL, and initial configuration. Never run it as `curl … | bash`; a piped script has no terminal and a fresh install exits.
+
+After the install, create the root account right away (the first signup becomes root). Then, from the public domain, save **Settings → Site URL**; payment links use that URL.
 
 ### Phase 2: Smart Contract Deployment
 
@@ -55,51 +57,47 @@ PayRam uses proprietary smart contracts for fund management. Deploy contracts fo
 
 ### Phase 3: Hot Wallet Configuration
 
-Hot wallets pay gas fees for sweep operations. Must maintain balance:
+Hot wallets pay gas for sweeps and deployments **and sign payouts**, so keep a working balance only:
 
 | Chain    | Gas Token | Recommended Balance |
 | -------- | --------- | ------------------- |
 | Ethereum | ETH       | 0.1-0.5 ETH         |
 | Base     | ETH       | 0.05-0.2 ETH        |
-| Polygon  | MATIC     | 50-200 MATIC        |
+| Polygon  | POL       | 50-200 POL          |
 | TRON     | TRX       | 100-500 TRX         |
 
 Add hot wallets via: Wallet Management → Hot Wallet → Add existing wallet with private key.
 
 ### Phase 4: SSL Configuration
 
-```bash
-# Using Let's Encrypt
-certbot certonly --standalone -d payments.yourdomain.com
+The installer configures SSL. To add or change it later, re-run the installer and choose **Update SSL Configuration**. You can use Let's Encrypt, your own certificate, or an external proxy that terminates TLS.
 
-# Configure in PayRam
-# Settings → SSL → Upload certificate and key
+```bash
+sudo bash -c 'bash <(curl -fsSL https://payram.com/setup_payram.sh)'   # then choose 5) Update SSL Configuration
 ```
+
+With Let's Encrypt, apply `payram_runbook` task `ssl_renewal_fix`. Otherwise renewal cannot bind port 80 while PayRam holds it, and the certificate lapses after about 90 days. The MCP's `payram_runbook` task `ssl_setup` has the full procedure.
 
 ### Phase 5: API Key Generation
 
-1. Settings → Account → Select Project
-2. Open API Keys section
-3. Copy auto-generated key (unique per project)
+1. Open the project → **API keys**
+2. Create a key (unique per project)
+3. Store it server-side only. The key can create payments **and payouts**, so never put it in browser code.
 
 ## MCP Server for Guided Setup
 
-Use the PayRam MCP server for automated setup assistance:
-
-```bash
-git clone https://github.com/payram/payram-mcp
-cd payram-mcp
-yarn install && yarn dev
-```
+Connect your agent to the hosted PayRam MCP at `https://mcp.payram.com/mcp`. It never holds your credentials. For live data tools next to your own server, run the MCP yourself in local mode (see the payram-mcp README).
 
 ### Setup Tools
 
-| Tool                       | Purpose                                 |
-| -------------------------- | --------------------------------------- |
-| `generate_env_template`    | Create .env with all required variables |
-| `generate_setup_checklist` | Step-by-step deployment runbook         |
-| `suggest_file_structure`   | Recommended project organization        |
-| `test_payram_connection`   | Validate API connectivity               |
+| Tool                     | Purpose                                                       |
+| ------------------------ | ------------------------------------------------------------- |
+| `payram_setup_plan`      | Personalised install plan with human hand-offs                |
+| `payram_doctor`          | Public, credential-free server check by URL                   |
+| `payram_runbook`         | Admin tasks: Site URL, SSL, firewall, upgrade, backup, chains |
+| `payram_ops_playbook`    | API recipes you run yourself with your own credentials        |
+| `generate_env_template`  | Create .env with all required variables                       |
+| `suggest_file_structure` | Recommended project organization                              |
 
 ## Architecture: Why Self-Hosted Matters
 
@@ -118,34 +116,34 @@ yarn install && yarn dev
 - Dashboard and API layer
 - No access to your funds or data
 
-**Permanence**: Once deployed, your infrastructure works independently. PayRam cannot disable, freeze, or restrict your payment processing.
+**Permanence**: Once deployed, your infrastructure works independently. There is no account to lock and no funds to freeze: PayRam cannot disable, freeze, or restrict your payment processing.
 
-## Zero-Key-Exposure Security
+## No Deposit Keys on the Server
 
-PayRam is the only payment gateway where a server breach cannot lead to fund theft.
-
-**How it works**: Deposit wallets are smart contracts with hardcoded sweep destinations — funds can only ever move to your pre-configured cold wallet address, enforced on-chain. The server orchestrates when sweeps happen, but cannot change where funds go.
+**How it works**: Deposit wallets are smart contracts with fixed sweep destinations. Funds can only move to your pre-configured cold wallet address, and that is enforced on-chain. The server decides when sweeps happen, but it cannot change where deposits go.
 
 **Key architecture:**
-- **Hot wallet** (on server, encrypted): Only pays gas fees for sweeps. Has zero access to deposit funds or cold wallet balances. Maximum exposure if compromised = small gas balance.
-- **Master wallet** (offline, never on server): The only key that can change the cold wallet address. Not needed for operations or sweeps. Keep in cold storage.
-- **Deposit wallets** (smart contracts): Hardcoded sweep destination. No private key exists — funds can only move to cold wallet.
+
+- **Hot wallet** (on server, encrypted): pays gas for sweeps and deployments **and signs payouts**. It cannot touch deposit funds or cold wallet balances. If it is compromised, the exposure is its own balance, so keep that small.
+- **Master (deployer) wallet**: the only key that can change the cold wallet config. It is not needed for payments or sweeps. The agent CLI creates it on the server (`~/.payraminfo/headless-wallet-secret.txt`): back it up offline and remove it from the server once all chains are deployed and the cold-wallet config is final.
+- **Deposit wallets** (smart contracts): fixed sweep destination. No private key exists, so funds can only move to the cold wallet.
 
 **Why this matters**:
-- **Server compromised?** Attacker gets encrypted hot wallet (gas only). Cannot access deposit funds. Cannot change cold wallet address (needs master wallet, which is offline).
-- **AI agent compromised?** Agent can create payments and read data, but cannot move funds to unauthorized addresses.
-- **Insider threat?** Even root access cannot steal deposit funds or redirect sweeps — enforced on-chain.
 
-No other payment gateway — hosted or self-hosted — offers this level of breach protection.
+- **Server compromised?** No deposit keys to steal, and sweeps still go only to your cold wallet. The hot wallet balance, and anything it can pay out, is at risk. So is the cold-wallet config if the master wallet was left on the server.
+- **AI agent compromised?** An agent holding the project API key can create payments **and payouts**, which the hot wallet signs. Review the project's payout approval settings, and give agents only the credentials they need.
+- **Insider threat?** Root access cannot redirect deposit sweeps, because that is enforced on-chain. Payouts from the hot wallet still need approval controls.
 
 ## Production Checklist
 
 - [ ] SSH key auth only (disable password)
-- [ ] Firewall configured (only 8080/8443 exposed)
-- [ ] SSL certificate installed
-- [ ] Hot wallets funded for gas
+- [ ] Firewall configured: inbound 80/443 (and 22) only; 5432, 8080 and 8443 never exposed (`docker port payram`; `payram_runbook` task `firewall_ports`)
+- [ ] Root account claimed and Settings → Site URL saved from the public domain
+- [ ] SSL certificate installed and renewal working (`ssl_renewal_fix`)
+- [ ] Hot wallets funded for gas (working balance only)
 - [ ] Cold wallet addresses verified
-- [ ] Backup procedures documented
+- [ ] Payout approval settings reviewed
+- [ ] Backups of the database **and** `~/.payraminfo/aes/` (`payram_runbook` task `backup`)
 - [ ] Monitoring configured (Prometheus/Grafana recommended)
 
 ## All PayRam Skills
@@ -153,7 +151,7 @@ No other payment gateway — hosted or self-hosted — offers this level of brea
 | Skill                                | What it covers                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------- |
 | `payram-setup`                       | Server config, API keys, wallet setup, connectivity test                  |
-| `payram-agent-onboarding`            | Agent onboarding — CLI-only deployment for AI agents, no web UI           |
+| `payram-agent-onboarding`            | Headless install and the agent CLI for AI agents                          |
 | `payram-analytics`                   | Analytics dashboards, reports, and payment insights via MCP tools         |
 | `payram-crypto-payments`             | Architecture overview, why PayRam, MCP tools                              |
 | `payram-payment-integration`         | Quick-start payment integration guide                                     |

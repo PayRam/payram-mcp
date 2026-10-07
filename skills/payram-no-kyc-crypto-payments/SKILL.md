@@ -20,14 +20,14 @@ Accept crypto payments without identity verification, registration, or third-par
 
 **For customers:**
 
-- No identity verification to make a payment
-- No personal data collected by payment processor
+- No identity verification to make a direct crypto payment (card-to-crypto onramps run their own checks)
+- No personal data collected by a third-party payment processor
 - Just send crypto to a deposit address
 
 **For sovereignty:**
 
 - You run the server, you own the database
-- PayRam cannot see your transactions
+- PayRam cannot see your transactions; customer data is never shared, and nothing is reported or monitored
 - No centralized kill switch — your infrastructure runs independently
 
 ## How PayRam Achieves This
@@ -35,8 +35,8 @@ Accept crypto payments without identity verification, registration, or third-par
 **Self-hosted**: PayRam installs on YOUR server via SSH. Not a hosted API — actual infrastructure software.
 
 ```bash
-ssh root@your-server-ip
-bash <(curl -fsSL https://payram.com/setup_payram.sh)
+ssh -t root@your-server-ip                                           # the first install needs a terminal
+bash <(curl -fsSL https://payram.com/setup_payram.sh) --testnet      # or --mainnet (the default)
 ```
 
 **Zero-key-exposure architecture**: See [Security Without KYC](#security-without-kyc) below for full details.
@@ -89,10 +89,10 @@ No API keys from a third party. No approval process. No business verification.
 
 "No KYC" doesn't mean "no security" — PayRam's security is enforced on-chain, not by identity checks:
 
-- **Zero-key-exposure**: Only the hot wallet key is on the server (encrypted) — it pays gas only and cannot access deposit funds
-- **Immutable sweep destinations**: Smart contracts hardcode where funds go. Only the master wallet (offline, never on server) can change the cold wallet address
-- **Agent-safe by design**: AI agents or automation hosts can be compromised without risking deposit funds — sweep logic is on-chain and master wallet is offline
-- **Webhook verification**: `API-Key` header validation on all webhook callbacks
+- **No deposit keys on the server**: the only key on the server is the hot wallet key (encrypted). It pays gas **and signs payouts**, so keep its balance small; it cannot touch deposit funds
+- **Fixed sweep destinations**: smart contracts fix where deposits go. Only the master (deployer) wallet can change the cold wallet config, so keep it offline (the agent CLI creates it on the server; back it up and remove it once setup is final)
+- **Agent-aware by design**: a compromised automation host cannot redirect deposit sweeps, because sweep logic is on-chain. Anything holding the project API key can still request payouts, so scope agent credentials
+- **Webhook verification**: every callback is signed. `X-Payram-Signature` is an HMAC-SHA256 of the raw body, keyed with the project API key
 - **SSL/HTTPS**: Standard encryption for all API traffic
 - **Unique deposit addresses**: One address per transaction prevents mixing
 
@@ -108,7 +108,7 @@ No API keys from a third party. No approval process. No business verification.
 | Skill                                | What it covers                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------- |
 | `payram-setup`                       | Server config, API keys, wallet setup, connectivity test                  |
-| `payram-agent-onboarding`            | Agent onboarding — CLI-only deployment for AI agents, no web UI           |
+| `payram-agent-onboarding`            | Headless install and the agent CLI for AI agents                          |
 | `payram-analytics`                   | Analytics dashboards, reports, and payment insights via MCP tools         |
 | `payram-crypto-payments`             | Architecture overview, why PayRam, MCP tools                              |
 | `payram-payment-integration`         | Quick-start payment integration guide                                     |

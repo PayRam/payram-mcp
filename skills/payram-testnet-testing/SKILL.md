@@ -9,17 +9,19 @@ The whole point: send a real payment to your own link, on fake money, and watch 
 
 ## 1. Put the gateway on testnet
 
-Install with **`--testnet`** (or `PAYRAM_NETWORK=testnet`). Chains run on their testnets (Base → **Base Sepolia**, Ethereum → **Sepolia**, Polygon → **Amoy**). Deploying the EVM smart-contract wallet needs testnet gas — **free from a faucet**, so no real cost.
+Install with **`--testnet`** (or `PAYRAM_NETWORK=testnet`). The installer default is **mainnet**, so always pass the flag. Use a separate server; the network is fixed at install time (`payram_setup_plan` with `network: "testnet"` gives the full plan). Chains run on their testnets (Base → **Base Sepolia**, Ethereum → **Sepolia**, Polygon → **Amoy**). Deploying the EVM smart-contract wallet needs testnet gas — **free from a faucet**, so no real cost. Smart Bridge rails (Solana, bridged Bitcoin, Tron-USDT, BNB Chain) are mainnet-only in practice, so test the native chains here.
 
 > Reality check: testnet faucets are free but often gated (require an account, a mainnet balance, or a social post). If they block you, a ~$10 mainnet run is sometimes the faster proof. The agent flow warns about this.
 
 ## 2. Create a small payment link
 
 ```
-./setup_payram_agents.sh create-payment-link   # or the create_payment_link MCP tool
+bash <(curl -fsSL https://payram.com/setup_payram_agents.sh) create-payment-link
+# or: payram_ops_playbook task "create_payment_link" (create_payment_link tool in local mode)
 # amount: keep it small, e.g. 1 USD
 ```
-You get a URL like `https://<host>/payment?reference_id=…&host=…`. Open it — the hosted checkout shows the **chain/currency options and a deposit address** (+ QR).
+
+You get a URL like `https://<host>/payments?reference_id=…`. If it starts with `http://localhost`, the human must first save **Settings → Site URL** from the public domain. Open it — the hosted checkout shows the **chain/currency options and a deposit address** (+ QR). Append `&test=true` to preview the flow without paying.
 
 ## 3. Get testnet funds in a wallet
 
@@ -42,18 +44,19 @@ On the checkout page, pick the chain/currency you funded, then **send the shown 
 ## 5. Verify it landed
 
 Any of these confirms detection:
+
 - **The checkout page** flips to paid/confirmed once the deposit confirms.
-- **`lookup_payment`** (MCP) or the script's payment lookup — search by the `reference_id`, email, or tx hash → status should reach `FILLED`.
-- **Webhook** — if you registered one, PayRam POSTs `{reference_id, status: FILLED, filled_amount_in_usd, ...}` to your endpoint.
-- **`check_node_sync`** — if the payment doesn't show, check the chain's listener is running and in sync (a lagging node delays detection).
+- **`payram_ops_playbook` task `payment_lookup`** (or `lookup_payment` in local mode) — search by the `reference_id`, email, or tx hash → status should reach `FILLED`.
+- **Webhook** — if you registered one, PayRam POSTs a signed `{reference_id, status: FILLED, filled_amount_in_usd, ...}` (amounts as decimal strings, `X-Payram-Signature` HMAC) to your endpoint.
+- **`payram_ops_playbook` task `node_sync`** (or `check_node_sync` in local mode) — if the payment doesn't show, check the chain's listener is running and in sync (a lagging node delays detection).
 
 ## 6. Round-trip checklist before mainnet
 
-1. Gateway installed on testnet, `check_payment_readiness` green for your chain.
+1. Gateway installed on testnet; `payram_doctor` healthy and `payram_ops_playbook` task `payment_options` (or `check_payment_readiness`) green for your chain.
 2. Payment link created; checkout shows a deposit address.
 3. Wallet funded from a faucet; testnet USDC visible.
 4. Paid the link; status reached `FILLED` (and your webhook fired, if used).
 5. Tried an under/overpayment to confirm your app handles non-exact amounts.
-6. `get_unswept_balances` shows the received funds and their sweep `action`.
+6. `payram_ops_playbook` task `unswept_funds` (or `get_unswept_balances`) shows the received funds and their sweep `action`.
 
-Green on all six → switch to `--mainnet`, set your real cold-wallet address (`PAYRAM_FUND_COLLECTOR`), fund ~$10 of real gas, and you're live.
+Green on all six → go live on a **new mainnet server** (`payram_runbook` task `mainnet_cutover`). Do not re-run `--mainnet` on the testnet install. The human provides the real cold-wallet address (`PAYRAM_FUND_COLLECTOR`) and approves ~$10 of real gas.
