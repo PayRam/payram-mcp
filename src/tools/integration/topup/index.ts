@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { logger } from '../../../utils/logger.js';
 import { safeHandler } from '../../common/errors.js';
@@ -198,7 +198,8 @@ const build = (part: string, framework: string): { snippet: string; notes: strin
     pieces.push(
       '// 3) ATOMIC INVOICE SETTLE + TOP-UP LINK //\n' +
         (framework === 'fastapi'
-          ? '# Port settleInvoice/settleOpenInvoices/createTopUpLink to your async DB layer;\n# the logic is identical to the Express version below.\n' + SETTLE_EXPRESS
+          ? '# Port settleInvoice/settleOpenInvoices/createTopUpLink to your async DB layer;\n# the logic is identical to the Express version below.\n' +
+            SETTLE_EXPRESS
           : SETTLE_EXPRESS),
     );
   return {
@@ -212,7 +213,7 @@ const build = (part: string, framework: string): { snippet: string; notes: strin
 };
 
 export const registerTopUpTools = (server: McpServer) => {
-  logger.info('Registering top-up integration tool...');
+  logger.debug('Registering top-up integration tool...');
   server.registerTool(
     'generate_topup_integration_snippet',
     {

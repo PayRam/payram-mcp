@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { logger } from '../../utils/logger.js';
 import { buildToolSchemas } from '../common/schemas.js';
 import { safeHandler } from '../common/errors.js';
@@ -114,7 +114,9 @@ export const registerCheckPaymentReadinessTool = (server: McpServer) => {
             missing.push('no deposit wallet (run setup_payram_agents.sh deploy-scw-flow)');
           }
           if (!enabledForProject) {
-            missing.push('chain/currency not enabled for this project (dashboard → project settings)');
+            missing.push(
+              'chain/currency not enabled for this project (dashboard → project settings)',
+            );
           }
           // Only assert listener-down when worker status was actually
           // available — otherwise every chain would falsely read not-ready.

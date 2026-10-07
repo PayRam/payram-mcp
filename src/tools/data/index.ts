@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { logger } from '../../utils/logger.js';
 import { getPayramExternalPlatformId } from '../../config/env.js';
 import { listPlatforms } from '../../api/payramApi.js';
@@ -49,7 +49,7 @@ export const resolveExternalPlatformId = async (input?: string): Promise<string>
 };
 
 export const registerDataTools = (server: McpServer) => {
-  logger.info('Registering data tools...');
+  logger.debug('Registering data tools...');
   registerListPlatformsTool(server);
   registerGetPaymentSummaryTool(server);
   registerLookupPaymentTool(server);

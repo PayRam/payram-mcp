@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { logger } from '../../utils/logger.js';
 import { buildToolSchemas } from '../common/schemas.js';
 import { safeHandler } from '../common/errors.js';
@@ -48,7 +48,8 @@ export const registerListRecipientsTool = (server: McpServer) => {
 
         let message: string;
         if (recipients.length === 0) {
-          message = 'No recipients found. Create one via POST /api/v1/recipients, then verify its OTP.';
+          message =
+            'No recipients found. Create one via POST /api/v1/recipients, then verify its OTP.';
         } else {
           const truncated = total > recipients.length;
           const header = truncated

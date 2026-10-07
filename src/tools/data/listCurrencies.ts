@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { logger } from '../../utils/logger.js';
 import { buildToolSchemas } from '../common/schemas.js';
 import { safeHandler } from '../common/errors.js';
@@ -47,7 +47,10 @@ export const registerListCurrenciesTool = (server: McpServer) => {
         } else {
           const header = `Supported currencies (${currencies.length}):\n`;
           const rows = currencies
-            .map((c) => `  ${c.currencyCode.padEnd(8)} on ${c.blockchainCode}${c.network ? ` (${c.network})` : ''}`)
+            .map(
+              (c) =>
+                `  ${c.currencyCode.padEnd(8)} on ${c.blockchainCode}${c.network ? ` (${c.network})` : ''}`,
+            )
             .join('\n');
           message = `${header}\n${rows}`;
         }

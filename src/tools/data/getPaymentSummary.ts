@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { logger } from '../../utils/logger.js';
 import { buildToolSchemas } from '../common/schemas.js';
 import { safeHandler } from '../common/errors.js';
@@ -12,9 +12,7 @@ const schemas = buildToolSchemas({
       externalPlatformId: z
         .string()
         .optional()
-        .describe(
-          'Optional. Auto-discovered from your account if omitted.',
-        ),
+        .describe('Optional. Auto-discovered from your account if omitted.'),
     })
     .strict(),
   output: z.object({
@@ -26,7 +24,6 @@ const schemas = buildToolSchemas({
 });
 
 type Input = z.infer<typeof schemas.input>;
-type Output = z.infer<typeof schemas.output>;
 
 const textContent = (text: string) => ({ type: 'text' as const, text });
 

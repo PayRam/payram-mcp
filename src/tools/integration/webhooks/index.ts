@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { logger } from '../../../utils/logger.js';
 import { safeHandler } from '../../common/errors.js';
@@ -117,7 +117,7 @@ const mockBuilders: Record<
 };
 
 export const registerWebhookTools = (server: McpServer) => {
-  logger.info('Registering webhook integration tools (multi-language)...');
+  logger.debug('Registering webhook integration tools (multi-language)...');
 
   server.registerTool(
     'generate_webhook_handler',

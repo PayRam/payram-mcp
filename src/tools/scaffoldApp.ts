@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { logger } from '../utils/logger.js';
 import { safeHandler } from './common/errors.js';
@@ -1732,7 +1732,7 @@ ${
 }
 
 export const registerScaffoldAppTool = (server: McpServer) => {
-  logger.info('Registering scaffold_payram_app tool');
+  logger.debug('Registering scaffold_payram_app tool');
 
   server.registerTool(
     'scaffold_payram_app',

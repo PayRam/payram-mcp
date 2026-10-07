@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { logger } from '../../../utils/logger.js';
 import { safeHandler } from '../../common/errors.js';
@@ -54,7 +54,7 @@ const formatSnippetResponse = (snippet: SnippetResponse, message: string) => ({
 });
 
 export const registerPayoutTools = (server: McpServer) => {
-  logger.info('Registering payout tools...');
+  logger.debug('Registering payout tools...');
 
   server.registerTool(
     'generate_payout_sdk_snippet',
