@@ -166,6 +166,8 @@ Back up `~/.payraminfo/aes/` together with the database. Without the AES key, th
 | API 401                             | Wrong or inactive API key                                 | Project → API keys                                                   |
 | Deposits not swept                  | Hot wallet low on gas                                     | `payram_ops_playbook` task `unswept_funds`                           |
 
+Not in the table, or want to be sure? Call `payram_troubleshoot` with the symptom or the error text.
+
 Backend errors are in `~/.payram-core/log/`, not in `docker logs payram` (`payram_ops_playbook` task `logs`).
 
 ---
@@ -187,6 +189,7 @@ Backend errors are in `~/.payram-core/log/`, not in `docker logs payram` (`payra
 | ----------------------- | --------------------------------------------------------------------------- |
 | `payram_setup_plan`     | Personalised install plan with human hand-offs                              |
 | `payram_doctor`         | Public, credential-free server check by URL                                 |
+| `payram_troubleshoot`   | Describe a problem or paste an error; get the cause, the check and the fix  |
 | `payram_runbook`        | Admin tasks: Site URL, domain, SSL, firewall, upgrade, backup, chains, etc. |
 | `payram_ops_playbook`   | API recipes you run yourself with your own credentials                      |
 | `generate_env_template` | `.env` template for your app                                                |

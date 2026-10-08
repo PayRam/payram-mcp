@@ -1,7 +1,6 @@
 import { SnippetResponse } from '../../common/snippetTypes.js';
 
-const notes =
-  "Spring WebFlux WebClient example that posts to Payram's /api/v1/payment endpoint defined in docs/payram-external.yaml.";
+const notes = "Spring WebFlux WebClient example that posts to Payram's /api/v1/payment endpoint.";
 
 export const buildSpringPaymentControllerSnippet = (): SnippetResponse => ({
   title: 'Spring Boot controller for Payram create-payment API',

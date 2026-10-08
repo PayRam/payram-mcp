@@ -1,7 +1,6 @@
 import { SnippetResponse } from '../../common/snippetTypes.js';
 
-const notes =
-  "Gin handler that re-posts incoming payloads to Payram's /api/v1/payment endpoint per docs/payram-external.yaml.";
+const notes = "Gin handler that re-posts incoming payloads to Payram's /api/v1/payment endpoint.";
 
 export const buildGoPaymentHandlerSnippet = (): SnippetResponse => ({
   title: 'Gin route for Payram create-payment API',

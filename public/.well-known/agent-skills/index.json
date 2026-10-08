@@ -84,7 +84,7 @@
       "description": "Functional how-to for integrating PayRam into an OpenClaw (or NemoClaw, Claude Desktop, Copilot, n8n, LangChain, Cursor, Windsurf) agent. Register the PayRam MCP server, list discovered tools, walk through a full payment flow from payment creation → signed webhook → fulfilment, and debug common issues. Includes a testnet walkthrough on Base Sepolia, agent configuration for WhatsApp/Telegram/Discord bot runtimes, and patterns for subscription access grants, pay-per-request API monetization (an HTTP 402 pattern built on payment links), and agent-to-agent commerce. Use when building an OpenClaw skill that needs to accept or send money, connecting an existing bot to PayRam, or troubleshooting an MCP registration that's not picking up tools.",
       "url": "https://raw.githubusercontent.com/PayRam/payram-mcp/main/skills/payram-openclaw-integration/SKILL.md",
       "mcpUrl": "https://mcp.payram.com/skills/payram-openclaw-integration.md",
-      "sha256": "4d9a3c13b64591d479927a950e2a97c8fb4534ae58a117cd3de316d958af4384"
+      "sha256": "12c0a5959a70722890afe5d314daabbf491472c26478c9d4bdf4ce0a87c20ecb"
     },
     {
       "name": "payram-payment-integration",
@@ -116,7 +116,7 @@
       "description": "Install and configure a self-hosted PayRam payment gateway on your own VPS. Start by calling the payram_setup_plan MCP tool for a personalised, ordered plan. Covers server requirements, the installer, testnet vs mainnet, claiming the root account, setting the public Site URL, HTTPS, deposit wallets, Smart Bridge rails, the project API key, the first payment link and hardening, with every human hand-off called out. Use when deploying PayRam on a server, whether a human uses the web dashboard or an agent drives the headless CLI.",
       "url": "https://raw.githubusercontent.com/PayRam/payram-mcp/main/skills/payram-setup/SKILL.md",
       "mcpUrl": "https://mcp.payram.com/skills/payram-setup.md",
-      "sha256": "0c2261ca89e10f371b18b91f00bdb702cbc94bf0ea6c9e34d4402f14aad71c0b"
+      "sha256": "94763a3aec390536391ec18e2165d735ca87812aff0352eb6cead6255f50afef"
     },
     {
       "name": "payram-stablecoin-payments",

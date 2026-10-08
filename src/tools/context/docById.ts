@@ -97,7 +97,7 @@ const collectDocIds = async (relativeDir: string): Promise<string[]> => {
     .catch(() => false);
   if (!exists) {
     throw new Error(
-      `Unknown docs prefix "${relativeDir}". Make sure the folder exists under docs/payram-docs-live.`,
+      `Unknown docs prefix "${relativeDir}". Call list_payram_docs to see the available folders.`,
     );
   }
 
@@ -127,6 +127,26 @@ const collectDocIds = async (relativeDir: string): Promise<string[]> => {
   return docs;
 };
 
+/**
+ * The mirrored docs come from a hosted-docs export and carry its page chrome
+ * (copy buttons, anchor links, image proxies, breadcrumbs). Strip that so an
+ * agent reads the content, not the markup debris.
+ */
+export const cleanDocMarkdown = (markdown: string): string =>
+  markdown
+    .split('\n')
+    .filter(
+      (line) =>
+        !/^\s*copyCopy\S*\s*$/.test(line) &&
+        !/^\s*\[hashtag\]\(#[^)]*\)\s*$/.test(line) &&
+        !/^\s*!\[[^\]]*\]\(https:\/\/docs\.payram\.com\/~gitbook\/[^)]*\)\s*$/.test(line) &&
+        !/^#{1,6}\s*$/.test(line),
+    )
+    .join('\n')
+    .replace(/\s*(?:arrow-up-right|chevron-right|chevron-down)\b/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
 export const registerDocLookupTool = (server: McpServer) => {
   server.registerTool(
     'get_payram_doc_by_id',
@@ -153,7 +173,7 @@ export const registerDocLookupTool = (server: McpServer) => {
           content: [textContent(`Loaded doc ${metadata.id} (${metadata.path})`)],
           structuredContent: {
             ...metadata,
-            markdown,
+            markdown: cleanDocMarkdown(markdown),
           },
         };
       },
@@ -166,7 +186,7 @@ export const registerDocLookupTool = (server: McpServer) => {
     {
       title: 'List Payram Docs',
       description:
-        'Lists the available Payram doc ids relative to docs/payram-docs-live. Optionally scope by a prefix such as "features".',
+        'Lists the available Payram doc ids. Optionally scope by a prefix such as "features".',
       inputSchema: listSchemas.input,
       outputSchema: listSchemas.output,
     },

@@ -267,3 +267,35 @@ export const excerpt = (body: string, max = 160): string => {
   const flat = body.replace(/\s+/g, ' ').trim();
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 };
+
+export type PortState = 'open' | 'refused' | 'timeout' | 'error';
+
+/**
+ * Can a TCP connection to hostname:port be made? Same SSRF guard as safeFetch.
+ * 'refused' (nothing listening) and 'timeout' (filtered or host down) are told
+ * apart because they have different fixes.
+ */
+export const probePort = (
+  hostname: string,
+  port: number,
+  options: { timeoutMs?: number; allowPrivate?: boolean } = {},
+): Promise<PortState> =>
+  new Promise((resolve) => {
+    const allowPrivate = options.allowPrivate ?? !isHosted();
+    const host = hostname.replace(/^\[|\]$/g, '');
+    if (net.isIP(host) && !allowPrivate && isPrivateAddress(host)) {
+      resolve('error');
+      return;
+    }
+    const socket = net.connect({ host, port, lookup: guardedLookup(allowPrivate) });
+    const finish = (state: PortState) => {
+      socket.destroy();
+      resolve(state);
+    };
+    socket.setTimeout(options.timeoutMs ?? 3_000);
+    socket.once('connect', () => finish('open'));
+    socket.once('timeout', () => finish('timeout'));
+    socket.once('error', (e: NodeJS.ErrnoException) =>
+      finish(e.code === 'ECONNREFUSED' ? 'refused' : 'error'),
+    );
+  });

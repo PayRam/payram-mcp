@@ -23,7 +23,7 @@ import {
 import { PayramWebhookStatus } from './webhookTypes.js';
 
 const snippetMetaSchema = z.object({
-  language: z.enum(['typescript', 'javascript', 'python', 'go', 'php', 'java'] as const),
+  language: z.enum(['typescript', 'javascript', 'python', 'go', 'php', 'java', 'bash'] as const),
   framework: z.enum([
     'express',
     'nextjs',

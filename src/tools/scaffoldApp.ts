@@ -99,7 +99,10 @@ const defaultAppName = (framework: string) => `payram-${framework}-starter`;
 const sanitizeGoModuleName = (name: string) =>
   name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'payramstarter';
 
-const expressIndexJs = (includeWebhooks: boolean) => `import express from 'express';
+const expressIndexJs = (
+  includeWebhooks: boolean,
+) => `import { createHmac, timingSafeEqual } from 'node:crypto';
+import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { Payram } from 'payram';
@@ -112,6 +115,22 @@ if (!process.env.PAYRAM_BASE_URL || !process.env.PAYRAM_API_KEY) {
 
 const app = express();
 app.use(cors());
+${
+  includeWebhooks
+    ? `
+// Webhooks are signed over the raw body, so this route comes before express.json().
+app.post('/api/payram/webhook', express.raw({ type: '*/*' }), (req, res) => {
+  const expected = 'sha256=' + createHmac('sha256', process.env.PAYRAM_API_KEY).update(req.body).digest('hex');
+  const received = req.get('X-Payram-Signature') || '';
+  if (received.length !== expected.length || !timingSafeEqual(Buffer.from(received), Buffer.from(expected))) {
+    return res.status(401).json({ error: 'invalid-signature' });
+  }
+  console.log('Payram webhook event:', req.get('X-Webhook-Test') === 'true' ? 'test ping' : req.body.toString('utf8'));
+  res.json({ message: 'Webhook received successfully' });
+});
+`
+    : ''
+}
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -145,7 +164,7 @@ app.get('/api/payments/:referenceId', async (req, res) => {
 
 app.post('/api/payouts/create', async (req, res) => {
   try {
-    const { amount, currencyCode = 'USDT', blockchainCode = 'ethereum', customerID, customerId, email = 'merchant@example.com', toAddress } = req.body;
+    const { amount, currencyCode = 'USDT', blockchainCode = 'ETH', customerID, customerId, email = 'merchant@example.com', toAddress } = req.body;
     const normalizedCustomerID = customerID ?? customerId ?? 'demo-customer-id';
     const payout = await payram.payouts.createPayout({
       customerID: normalizedCustomerID,
@@ -169,16 +188,7 @@ app.get('/api/payouts/:id', async (req, res) => {
     res.status(500).json({ error: 'payout_status_failed', details: error instanceof Error ? error.message : String(error) });
   }
 });
-${
-  includeWebhooks
-    ? `
-app.post('/api/payram/webhook', (req, res) => {
-  console.log('Payram webhook event:', req.body);
-  res.json({ message: 'Webhook received successfully' });
-});
-`
-    : ''
-}
+
 const port = process.env.PORT ?? 3000;
 app.listen(port, () => {
   console.log('Payram Express starter listening on http://localhost:' + port);
@@ -363,7 +373,7 @@ const expressFrontend = `<!doctype html>
             </label>
             <label>
               Blockchain Code
-              <input type="text" name="blockchainCode" value="ethereum" />
+              <input type="text" name="blockchainCode" value="ETH" />
             </label>
             <label>
               Customer ID
@@ -513,9 +523,9 @@ ${
   input.includeWebhooks !== false
     ? `## Payram dashboard checklist
 
-1. Copy your API key and server base URL from the Payram dashboard (see docs/js-sdk.md) and paste them into .env as PAYRAM_API_KEY and PAYRAM_BASE_URL.
+1. Copy your API key and server base URL from the Payram dashboard and paste them into .env as PAYRAM_API_KEY and PAYRAM_BASE_URL.
 2. Under Developers → Webhooks set the URL to http://localhost:3000/api/payram/webhook while testing locally.
-3. Ensure the webhook uses the same API-Key header value; this sample rejects calls with the wrong key.
+3. The handler verifies the X-Payram-Signature header (HMAC-SHA256 of the raw body, keyed with PAYRAM_API_KEY); a wrong key returns 401.
 `
     : ''
 }
@@ -641,7 +651,7 @@ const preStyle: CSSProperties = {
 export default function HomePage() {
   const [paymentForm, setPaymentForm] = useState({ amount: '1', referenceId: 'demo-ref' });
   const [paymentStatusRef, setPaymentStatusRef] = useState('demo-ref');
-  const [payoutForm, setPayoutForm] = useState({ amount: '1', currencyCode: 'USDT', blockchainCode: 'ethereum', customerID: 'demo-customer-id', email: 'merchant@example.com', toAddress: '0xfeedfacecafebeefdeadbeefdeadbeefdeadbeef' });
+  const [payoutForm, setPayoutForm] = useState({ amount: '1', currencyCode: 'USDT', blockchainCode: 'ETH', customerID: 'demo-customer-id', email: 'merchant@example.com', toAddress: '0xfeedfacecafebeefdeadbeefdeadbeefdeadbeef' });
   const [payoutStatusId, setPayoutStatusId] = useState('1');
 
   const [paymentResult, setPaymentResult] = useState<Record<string, unknown> | null>(null);
@@ -947,9 +957,9 @@ ${
   input.includeWebhooks !== false
     ? `## Payram dashboard checklist
 
-1. From the Payram dashboard copy your API key and base URL (see docs/js-sdk.md) and place them in .env.
+1. From the Payram dashboard copy your API key and base URL and place them in .env.
 2. Configure a webhook endpoint pointing to http://localhost:3000/api/payram/webhook while running locally.
-3. Reuse the same API-Key header that you configured in .env so the generated handler accepts requests.
+3. The handler verifies the X-Payram-Signature header (HMAC-SHA256 of the raw body, keyed with PAYRAM_API_KEY), so PAYRAM_API_KEY must be the key of the project the webhook belongs to.
 `
     : ''
 }
@@ -991,7 +1001,7 @@ export async function GET(_request: Request, context: { params: { referenceId: s
       path: 'app/api/payouts/create/route.ts',
       description: 'Payout creation route.',
       contents: nextApiRoute(
-        '    const payout = await payram.payouts.createPayout({ customerID: payload.customerID ?? payload.customerId ?? "demo-customer-id", email: payload.email ?? "merchant@example.com", blockchainCode: payload.blockchainCode ?? "ethereum", currencyCode: payload.currencyCode ?? "USDT", amount: String(payload.amount ?? "1"), toAddress: payload.toAddress ?? "0xfeedfacecafebeefdeadbeefdeadbeefdeadbeef" });\n    return NextResponse.json(payout);',
+        '    const payout = await payram.payouts.createPayout({ customerID: payload.customerID ?? payload.customerId ?? "demo-customer-id", email: payload.email ?? "merchant@example.com", blockchainCode: payload.blockchainCode ?? "ETH", currencyCode: payload.currencyCode ?? "USDT", amount: String(payload.amount ?? "1"), toAddress: payload.toAddress ?? "0xfeedfacecafebeefdeadbeefdeadbeefdeadbeef" });\n    return NextResponse.json(payout);',
       ),
     },
     {
@@ -1024,19 +1034,23 @@ export async function GET(_request: Request, context: { params: { id: string } }
     files.push({
       path: 'app/api/payram/webhook/route.ts',
       description: 'Webhook handler for Payram events.',
-      contents: `import { NextRequest } from 'next/server';
-import { Payram } from 'payram';
+      contents: `import { createHmac, timingSafeEqual } from 'node:crypto';
+import { NextRequest, NextResponse } from 'next/server';
 
-const payram = new Payram({
-  apiKey: process.env.PAYRAM_API_KEY!,
-  baseUrl: process.env.PAYRAM_BASE_URL!,
-});
-
-export const POST = payram.webhooks.next.app(
-  async (payload, req: NextRequest) => {
-    console.log('Payram webhook event', payload.event ?? payload.status, payload.reference_id);
-  },
-);
+export async function POST(request: NextRequest) {
+  // The signature covers the exact bytes PayRam sent, so read the body as text and verify first.
+  const rawBody = await request.text();
+  const expected = 'sha256=' + createHmac('sha256', process.env.PAYRAM_API_KEY!).update(rawBody).digest('hex');
+  const received = request.headers.get('X-Payram-Signature') ?? '';
+  if (received.length !== expected.length || !timingSafeEqual(Buffer.from(received), Buffer.from(expected))) {
+    return NextResponse.json({ error: 'invalid-signature' }, { status: 401 });
+  }
+  if (request.headers.get('X-Webhook-Test') !== 'true') {
+    const payload = JSON.parse(rawBody);
+    console.log('Payram webhook event', payload.status, payload.reference_id);
+  }
+  return NextResponse.json({ message: 'Webhook received successfully' });
+}
 `,
     });
   }
@@ -1078,9 +1092,9 @@ ${
   input.includeWebhooks !== false
     ? `## Payram dashboard checklist
 
-1. Copy your API key and base URL from the Payram dashboard (see docs/js-sdk.md) and store them in .env.
+1. Copy your API key and base URL from the Payram dashboard and store them in .env.
 2. Configure a webhook endpoint pointing to http://localhost:8000/api/payram/webhook while running locally.
-3. Payram must send the same API-Key header you configured; otherwise the FastAPI route returns 401.
+3. The route verifies the X-Payram-Signature header (HMAC-SHA256 of the raw body, keyed with PAYRAM_API_KEY); a wrong key returns 401.
 `
     : ''
 }
@@ -1089,14 +1103,18 @@ ${
     {
       path: 'main.py',
       description: 'FastAPI app with API + webhook + template route.',
-      contents: `import os
-    from fastapi import FastAPI, Request, HTTPException, status
-    from fastapi.responses import HTMLResponse, JSONResponse
-    from fastapi.templating import Jinja2Templates
-    from dotenv import load_dotenv
-    import httpx
+      contents: `import hashlib
+import hmac
+import json
+import os
 
-    load_dotenv()
+import httpx
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+
+load_dotenv()
 
 PAYRAM_BASE_URL = os.getenv('PAYRAM_BASE_URL')
 PAYRAM_API_KEY = os.getenv('PAYRAM_API_KEY')
@@ -1137,7 +1155,7 @@ async def create_payout(payload: dict):
       'customerID': payload.get('customerID') or payload.get('customerId') or 'demo-customer-id',
       'amount': payload.get('amount', 1),
       'currencyCode': payload.get('currencyCode', 'USDT'),
-        'blockchainCode': payload.get('blockchainCode', 'ethereum'),
+        'blockchainCode': payload.get('blockchainCode', 'ETH'),
         'toAddress': payload.get('toAddress', '0xfeedfacecafebeefdeadbeefdeadbeefdeadbeef'),
         'email': payload.get('email', 'merchant@example.com'),
     })
@@ -1152,10 +1170,13 @@ ${
     ? `
 @app.post('/api/payram/webhook')
 async def webhook(request: Request):
-  if request.headers.get('API-Key') != PAYRAM_API_KEY:
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='invalid-api-key')
-  payload = await request.json()
-  print('Payram webhook payload', payload)
+  # The signature covers the exact bytes PayRam sent, so verify before parsing.
+  raw = await request.body()
+  expected = 'sha256=' + hmac.new(PAYRAM_API_KEY.encode(), raw, hashlib.sha256).hexdigest()
+  if not hmac.compare_digest(expected.encode(), request.headers.get('X-Payram-Signature', '').encode()):
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='invalid-signature')
+  if request.headers.get('X-Webhook-Test') != 'true':
+    print('Payram webhook payload', json.loads(raw))
   return {'message': 'Webhook received successfully'}
 `
     : ''
@@ -1201,9 +1222,9 @@ ${
   input.includeWebhooks !== false
     ? `## Payram dashboard checklist
 
-1. In the Payram dashboard copy your API key + base URL (docs/js-sdk.md covers both) and paste them into .env.
+1. In the Payram dashboard copy your API key + base URL and paste them into .env.
 2. Add a webhook pointing to http://localhost:8000/api/payram/webhook when testing locally.
-3. Reuse the same API key for the webhook's API-Key header so the controller accepts the request.
+3. The controller verifies the X-Payram-Signature header (HMAC-SHA256 of the raw body, keyed with PAYRAM_API_KEY); a wrong key returns 401.
 `
     : ''
 }
@@ -1279,7 +1300,7 @@ class PayramController extends Controller
           'customerID' => $request->input('customerID', $request->input('customerId', 'demo-customer-id')),
           'amount' => $request->input('amount', 1),
           'currencyCode' => $request->input('currencyCode', 'USDT'),
-            'blockchainCode' => $request->input('blockchainCode', 'ethereum'),
+            'blockchainCode' => $request->input('blockchainCode', 'ETH'),
             'toAddress' => $request->input('toAddress'),
             'email' => $request->input('email', 'merchant@example.com'),
         ]);
@@ -1296,11 +1317,15 @@ ${
     ? `
     public function webhook(Request $request): JsonResponse
     {
-      if ($request->header('API-Key') !== $this->apiKey) {
-        return response()->json(['error' => 'invalid-api-key'], 401);
+      // The signature covers the exact bytes PayRam sent, so verify the raw body.
+      $expected = 'sha256=' . hash_hmac('sha256', $request->getContent(), $this->apiKey);
+      if (!hash_equals($expected, (string) $request->header('X-Payram-Signature', ''))) {
+        return response()->json(['error' => 'invalid-signature'], 401);
       }
 
-      logger()->info('Payram webhook payload', $request->all());
+      if ($request->header('X-Webhook-Test') !== 'true') {
+        logger()->info('Payram webhook payload', json_decode($request->getContent(), true) ?? []);
+      }
       return response()->json(['message' => 'Webhook received successfully']);
     }
 `
@@ -1361,9 +1386,9 @@ ${
   input.includeWebhooks !== false
     ? `## Payram dashboard checklist
 
-1. Copy PAYRAM_BASE_URL and PAYRAM_API_KEY from the Payram dashboard (see docs/js-sdk.md) into .env.
+1. Copy PAYRAM_BASE_URL and PAYRAM_API_KEY from the Payram dashboard into .env.
 2. Add a webhook endpoint targeting http://localhost:3000/api/payram/webhook for local testing.
-3. Ensure Payram uses the same API key for the webhook call; the Gin handler returns 401 otherwise.
+3. The handler verifies the X-Payram-Signature header (HMAC-SHA256 of the raw body, keyed with PAYRAM_API_KEY); a wrong key returns 401.
 `
     : ''
 }
@@ -1376,6 +1401,9 @@ ${
 
 import (
   "bytes"
+  "crypto/hmac"
+  "crypto/sha256"
+  "encoding/hex"
   "encoding/json"
   "io"
   "log"
@@ -1472,7 +1500,7 @@ func createPayout(c *gin.Context) {
     body["currencyCode"] = "USDT"
   }
   if body["blockchainCode"] == nil {
-    body["blockchainCode"] = "ethereum"
+    body["blockchainCode"] = "ETH"
   }
   if body["customerID"] == nil {
     if legacy, ok := payload["customerId"]; ok {
@@ -1499,13 +1527,18 @@ ${
   input.includeWebhooks !== false
     ? `
 func webhook(c *gin.Context) {
-  if c.GetHeader("API-Key") != payramKey {
-    c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid-api-key"})
+  // The signature covers the exact bytes PayRam sent, so verify before parsing.
+  raw, _ := c.GetRawData()
+  mac := hmac.New(sha256.New, []byte(payramKey))
+  mac.Write(raw)
+  expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+  if !hmac.Equal([]byte(expected), []byte(c.GetHeader("X-Payram-Signature"))) {
+    c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid-signature"})
     return
   }
-  var payload map[string]interface{}
-  c.BindJSON(&payload)
-  log.Println("Payram webhook payload", payload)
+  if c.GetHeader("X-Webhook-Test") != "true" {
+    log.Println("Payram webhook payload", string(raw))
+  }
   c.JSON(http.StatusOK, gin.H{"message": "Webhook received successfully"})
 }
 `
@@ -1561,9 +1594,9 @@ ${
   input.includeWebhooks !== false
     ? `## Payram dashboard checklist
 
-1. Grab your API key + base URL from the Payram dashboard (see docs/js-sdk.md) and expose them as PAYRAM_API_KEY / PAYRAM_BASE_URL.
+1. Grab your API key + base URL from the Payram dashboard and expose them as PAYRAM_API_KEY / PAYRAM_BASE_URL.
 2. Create a webhook endpoint pointing to http://localhost:8080/api/payram/webhook while running locally.
-3. Configure the webhook to send the same API-Key header so the controller returns 200 instead of 401.
+3. The controller verifies the X-Payram-Signature header (HMAC-SHA256 of the raw body, keyed with PAYRAM_API_KEY); a wrong key returns 401.
 `
     : ''
 }
@@ -1685,7 +1718,7 @@ class PayramApiController {
     body.put("customerID", customerID);
     body.put("amount", payload.getOrDefault("amount", 1));
     body.put("currencyCode", payload.getOrDefault("currencyCode", "USDT"));
-    body.put("blockchainCode", payload.getOrDefault("blockchainCode", "ethereum"));
+    body.put("blockchainCode", payload.getOrDefault("blockchainCode", "ETH"));
     body.put("toAddress", payload.getOrDefault("toAddress", "0xfeedfacecafebeefdeadbeefdeadbeefdeadbeef"));
     body.put("email", payload.getOrDefault("email", "merchant@example.com"));
     return payram("POST", "/api/v1/withdrawal/merchant", body);
@@ -1700,13 +1733,20 @@ ${
     ? `
   @PostMapping("/payram/webhook")
   public ResponseEntity<?> webhook(
-      @RequestHeader(value = "API-Key", required = false) String headerKey,
-      @RequestBody Map<String, Object> payload) {
-    if (headerKey == null || !headerKey.equals(apiKey)) {
-      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "invalid-api-key"));
+      @RequestHeader(value = "X-Payram-Signature", required = false) String signature,
+      @RequestHeader(value = "X-Webhook-Test", required = false) String testFlag,
+      @RequestBody String rawBody) throws Exception {
+    // The signature covers the exact bytes PayRam sent, so verify the raw body.
+    javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+    mac.init(new javax.crypto.spec.SecretKeySpec(apiKey.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+    String expected = "sha256=" + java.util.HexFormat.of().formatHex(mac.doFinal(rawBody.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    if (signature == null || !java.security.MessageDigest.isEqual(expected.getBytes(java.nio.charset.StandardCharsets.UTF_8), signature.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "invalid-signature"));
     }
 
-    System.out.println("Payram webhook payload " + payload);
+    if (!"true".equals(testFlag)) {
+      System.out.println("Payram webhook payload " + rawBody);
+    }
     return ResponseEntity.ok(Map.of("message", "Webhook received successfully"));
   }
 `
