@@ -1,4 +1,5 @@
-export type SupportedLanguage = 'typescript' | 'javascript' | 'python' | 'go' | 'php' | 'java';
+export type SupportedLanguage =
+  'typescript' | 'javascript' | 'python' | 'go' | 'php' | 'java' | 'bash';
 
 export type SupportedBackendFramework =
   'nextjs' | 'express' | 'fastapi' | 'gin' | 'laravel' | 'spring-boot' | 'generic-http';

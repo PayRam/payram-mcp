@@ -68,5 +68,5 @@ async function handleUndefinedStatus(payload: PayramWebhookPayload) {
     description:
       'Routes Payram webhook events by payment status based on the WebhookPayload schema.',
   },
-  notes: 'Switch statement is based on PayramWebhookStatus enum from docs/payram-webhook.yaml.',
+  notes: 'Switch statement is based on PayramWebhookStatus enum.',
 });

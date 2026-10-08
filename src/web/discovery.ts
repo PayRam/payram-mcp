@@ -46,6 +46,7 @@ export const buildMcpJson = () => ({
   start_here: {
     install: 'payram_setup_plan',
     check_a_server: 'payram_doctor',
+    troubleshoot: 'payram_troubleshoot',
     admin_tasks: 'payram_runbook',
     daily_operations: 'payram_ops_playbook',
   },

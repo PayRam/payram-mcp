@@ -1,7 +1,6 @@
 import { SnippetResponse } from '../../common/snippetTypes.js';
 
-const notes =
-  'Wires the Payram JS SDK (docs/js-sdk.md) into a Next.js App Router handler for initiating payments.';
+const notes = 'Wires the Payram JS SDK into a Next.js App Router handler for initiating payments.';
 
 export const buildNextjsPaymentRouteSnippet = (): SnippetResponse => ({
   title: 'Next.js App Router endpoint for Payram create-payment',

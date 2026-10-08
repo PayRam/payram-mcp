@@ -70,19 +70,22 @@ CREATE TABLE invoices (
 );`;
 
 const WEBHOOK_EXPRESS = `import crypto from 'crypto';
-// POST from PayRam: snake_case body + an API-Key header = your webhook shared secret.
+// POST from PayRam: snake_case body + X-Payram-Signature (HMAC-SHA256 of the raw body, keyed with the project API key).
 // KEY INSIGHT: filled_amount_in_usd is CUMULATIVE per reference (not a delta),
 // so we credit only the increase since we last saw this reference. That single
 // rule absorbs duplicate, out-of-order, partial-then-full, and overpaid webhooks.
-app.post('/webhooks/payram', express.json(), async (req, res) => {
-  const secret = process.env.PAYRAM_WEBHOOK_SECRET || '';
-  const got = req.header('API-Key') || '';
-  if (got.length !== secret.length ||
-      !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(secret))) {
-    return res.status(401).json({ message: 'invalid api key' });
+app.post('/webhooks/payram', express.raw({ type: '*/*' }), async (req, res) => {
+  // The signature covers the exact bytes PayRam sent, so verify before parsing.
+  const apiKey = process.env.PAYRAM_API_KEY || '';
+  const expected = 'sha256=' + crypto.createHmac('sha256', apiKey).update(req.body).digest('hex');
+  const got = req.header('X-Payram-Signature') || '';
+  if (got.length !== expected.length ||
+      !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected))) {
+    return res.status(401).json({ message: 'invalid signature' });
   }
+  if (req.header('X-Webhook-Test') === 'true') return res.status(200).json({ message: 'test received' });
 
-  const { reference_id, customer_id, status, filled_amount_in_usd } = req.body;
+  const { reference_id, customer_id, status, filled_amount_in_usd } = JSON.parse(req.body.toString('utf8'));
   if (!['PARTIALLY_FILLED', 'FILLED', 'OVER_FILLED'].includes(status)) {
     return res.status(200).json({ message: 'ignored (no funds credited)' });
   }
@@ -153,18 +156,22 @@ async function createTopUpLink(user, invoice, shortfallUsd) {
   return url;
 }`;
 
-const WEBHOOK_FASTAPI = `import hmac, os
+const WEBHOOK_FASTAPI = `import hashlib, hmac, json, os
 from fastapi import FastAPI, Request, HTTPException
 
 app = FastAPI()
-SECRET = os.environ['PAYRAM_WEBHOOK_SECRET']
+API_KEY = os.environ['PAYRAM_API_KEY']  # the project API key signs every webhook
 
 # filled_amount_in_usd is CUMULATIVE per reference; credit only the increase.
 @app.post('/webhooks/payram')
 async def payram_webhook(req: Request):
-    if not hmac.compare_digest(req.headers.get('api-key', ''), SECRET):
-        raise HTTPException(401, 'invalid api key')
-    body = await req.json()
+    raw = await req.body()  # the signature covers these exact bytes
+    expected = 'sha256=' + hmac.new(API_KEY.encode(), raw, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected.encode(), req.headers.get('x-payram-signature', '').encode()):
+        raise HTTPException(401, 'invalid signature')
+    if req.headers.get('x-webhook-test') == 'true':
+        return {'message': 'test received'}
+    body = json.loads(raw)
     if body.get('status') not in ('PARTIALLY_FILLED', 'FILLED', 'OVER_FILLED'):
         return {'message': 'ignored'}
     reference_id = body['reference_id']; customer_id = body['customer_id']

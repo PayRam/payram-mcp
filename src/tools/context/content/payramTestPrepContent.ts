@@ -1,4 +1,5 @@
 import { MarkdownDocResponse } from '../../../types/context.js';
+import { REQUIREMENTS } from '../../../facts/payram.js';
 
 export const PAYRAM_TEST_PREP_DOC: MarkdownDocResponse = {
   title: 'Payram Test Readiness Checklist',
@@ -8,7 +9,7 @@ export const PAYRAM_TEST_PREP_DOC: MarkdownDocResponse = {
     {
       id: 'say-test-payram',
       title: 'How to start the guided test',
-      markdown: `Whenever you're ready to run through a hands-on Payram test, reply with **"test payram"**. I'll only walk through the environment checklist after you explicitly say those words so we don't spin up demos accidentally.`,
+      markdown: `This walks through what is needed before a hands-on Payram test: a running server, the base URL and an API key. Answer the first question to begin; nothing is created or deployed until you ask for it.`,
       sources: [
         {
           id: 'welcome-to-payram',
@@ -22,11 +23,10 @@ export const PAYRAM_TEST_PREP_DOC: MarkdownDocResponse = {
       title: 'First question: do you already have a self-hosted Payram server?',
       markdown: `Let me know whether your self-hosted Payram instance is already live.
 
-- **If you still need to deploy it**, follow the Quick Setup guide to provision a Ubuntu 22.04 box (2 vCPU / 6 GB RAM / 15 GB+ disk), open the required ports, and run the \
-  \`setup_payram.sh\` script for mainnet or testnet. The guide also walks through PostgreSQL configuration, SSL, and dependency installs so your dashboard and APIs come online.
+- **If you still need to deploy it**, follow the Quick Setup guide to provision a server (${REQUIREMENTS.server}; ${REQUIREMENTS.os}), open ports 80 and 443, and run the installer for testnet. payram_setup_plan gives the exact personalised steps, including database and SSL choices.
 - **If your server is already running**, we can jump straight to collecting credentials.
 
-Either way, I'll keep asking until it's clear whether a new install is required.`,
+Either way, settle first whether a new install is required.`,
       sources: [
         {
           id: 'deployment-guide/quick-setup',

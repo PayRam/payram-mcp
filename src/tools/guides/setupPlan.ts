@@ -36,6 +36,10 @@ const stepSchema = z.object({
   expect: z.string().optional(),
   gate: z.string().optional().describe('Why the agent must stop and get the human here'),
   notes: z.array(z.string()).optional(),
+  ifItFails: z
+    .string()
+    .optional()
+    .describe('What to do when the step does not give the expected result'),
 });
 
 const phaseSchema = z.object({
@@ -94,6 +98,12 @@ const inputSchema = z.object({
     .enum(STAGES)
     .default('fresh')
     .describe('Where you are now; the plan starts from the next step'),
+  access: z
+    .enum(['ssh', 'human_runs_commands'])
+    .default('ssh')
+    .describe(
+      'ssh = you can run commands on the server yourself. human_runs_commands = you only chat: the human runs each command and pastes the output back. Ask the user which applies before planning.',
+    ),
   integration: z
     .enum(['none', 'website', 'shopify', 'woocommerce'])
     .default('none')
@@ -127,7 +137,7 @@ const step = (
 
 export const buildSetupPlan = (raw: Partial<Input>): Output => {
   const input = inputSchema.parse(raw);
-  const { path, network, domain, role, wallet, stage, integration } = input;
+  const { path, network, domain, role, wallet, stage, integration, access } = input;
   const ssl = input.ssl ?? (domain ? 'letsencrypt' : 'none');
   const agent = path === 'agent';
   const mainnet = network === 'mainnet';
@@ -184,6 +194,15 @@ export const buildSetupPlan = (raw: Partial<Input>): Output => {
       );
     }
     prep.push(
+      step('preflight', 'Check the server before installing', 'agent_shell', {
+        commands: `cat /etc/os-release | head -3; uname -m
+free -m | sed -n 2p; df -h / | tail -1
+sudo ss -ltnp | grep -E ':(80|443)\\b' || echo "80/443 are free"
+curl -sI https://payram.com/setup_payram_agents.sh | head -1`,
+        expect: `A supported Linux (Ubuntu 22.04+ recommended), at least 4 GB RAM, 50 GB disk (the installer refuses under 5 GB free), nothing on 80/443, and HTTP/2 200 or HTTP/1.1 200 for the script.`,
+        ifItFails:
+          'call payram_troubleshoot with the line that looks wrong (or payram_runbook "install_failed"). Fix the server before continuing; most install failures are caught here.',
+      }),
       step('firewall', 'Open only 22, 80 and 443', 'agent_shell', {
         commands: `sudo ufw allow 22/tcp && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw --force enable
 sudo ss -ltnp | grep -E ':(80|443)\\b' || echo "80/443 are free"`,
@@ -258,6 +277,8 @@ ${envLines.length ? `${envLines.join('\n')}\n` : ''}${installCmd}`,
               agent && mainnet
                 ? 'Mainnet: the human must provide the cold wallet address and approve the gas spend before this runs.'
                 : undefined,
+            ifItFails:
+              'call payram_troubleshoot with the last error lines (remove passwords and keys first), or payram_runbook "install_failed". Do not reset an existing install.',
           },
         ),
         step('verify_install', 'Verify the gateway answers', 'agent_shell', {
@@ -265,6 +286,8 @@ ${envLines.length ? `${envLines.join('\n')}\n` : ''}${installCmd}`,
 curl -s ${publicUrl}/api/v1/health | jq '{status, version}'            # from outside
 docker port ${CONTAINER.name}                                          # expect only 80 (and 443)`,
           expect: 'status "ok" from both; only 80/443 published.',
+          ifItFails:
+            'payram_doctor with the public address, then payram_troubleshoot {"id":"dashboard-unreachable"}.',
           notes: [
             'Or call payram_doctor with baseUrl = ' +
               publicUrl +
@@ -307,6 +330,7 @@ cat ~/.payraminfo/root-credentials.env   # hand these to the human over a privat
             'The URL is taken from the page you save it on, so save it while browsing the public domain.',
           ],
           gate: 'Root-only and must be done in a browser on the public domain.',
+          ifItFails: 'payram_troubleshoot {"id":"links-show-localhost"}.',
         }),
       ],
     });
@@ -334,6 +358,10 @@ cat ~/.payraminfo/root-credentials.env   # hand these to the human over a privat
     });
   }
 
+  // The one-step agent flow already created the wallet, API key and first link; later steps then
+  // verify those results instead of running the commands a second time.
+  const oneStepRan = agent && before('installed');
+
   // ── Phase 5: wallet ────────────────────────────────────────────────
   if (before('wallet_ready')) {
     const wsteps: Step[] = [];
@@ -345,7 +373,11 @@ cat ~/.payraminfo/root-credentials.env   # hand these to the human over a privat
           agent ? 'agent_shell' : 'human_dashboard',
           {
             commands: agent
-              ? `PAYRAM_BLOCKCHAIN_CODE=BASE ${INSTALL.agentCmd('deploy-scw-flow')}   # skip if the one-step flow already deployed it`
+              ? oneStepRan
+                ? `${INSTALL.agentCmd('status')}   # the one-step flow normally deployed the wallet; check it is listed
+# ONLY if no wallet is listed:
+PAYRAM_BLOCKCHAIN_CODE=BASE ${INSTALL.agentCmd('deploy-scw-flow')}`
+                : `PAYRAM_BLOCKCHAIN_CODE=BASE ${INSTALL.agentCmd('deploy-scw-flow')}`
               : 'Dashboard → Wallets → add a deposit wallet for Base',
             expect: 'SCW registered and linked to the project.',
             notes: [
@@ -356,6 +388,8 @@ cat ~/.payraminfo/root-credentials.env   # hand these to the human over a privat
               `More EVM chains later: PAYRAM_BLOCKCHAIN_CODE=ETH (or POLYGON) ${INSTALL.agentCmd('deploy-scw')}`,
             ],
             gate: mainnet ? 'Gas spend and cold-wallet address need the human.' : undefined,
+            ifItFails:
+              'payram_troubleshoot {"id":"wallet-deploy-needs-gas"} (most often the deployer address needs gas).',
           },
         ),
       );
@@ -398,7 +432,11 @@ cat ~/.payraminfo/root-credentials.env   # hand these to the human over a privat
       steps: [
         step('api_key', 'Get the project API key', agent ? 'agent_shell' : 'human_dashboard', {
           commands: agent
-            ? `${INSTALL.agentCmd('ensure-api-key')}\n# saved to ~/.payraminfo/merchant-api-key.env (chmod 600)`
+            ? oneStepRan
+              ? `ls -l ~/.payraminfo/merchant-api-key.env   # the one-step flow saved the key here (chmod 600)
+# ONLY if the file is missing:
+${INSTALL.agentCmd('ensure-api-key')}`
+              : `${INSTALL.agentCmd('ensure-api-key')}\n# saved to ~/.payraminfo/merchant-api-key.env (chmod 600)`
             : `${DASHBOARD_PAGES.apiKeys} → create key`,
           notes: [
             'The key authorises payment creation AND payouts: keep it server-side, never in browser code or chat.',
@@ -411,9 +449,14 @@ cat ~/.payraminfo/root-credentials.env   # hand these to the human over a privat
           agent ? 'agent_shell' : 'human_dashboard',
           {
             commands: agent
-              ? INSTALL.agentCmd('create-payment-link')
+              ? oneStepRan
+                ? `# The one-step flow printed a link. Open it to check it; create another only if you need one:
+${INSTALL.agentCmd('create-payment-link')}`
+                : INSTALL.agentCmd('create-payment-link')
               : `payram_ops_playbook task "create_payment_link"`,
             expect: `A URL starting with ${publicUrl}. If it starts with http://localhost, redo the site URL step.`,
+            ifItFails:
+              'payram_troubleshoot {"id":"payment-create-code-5"} for a creation error, or {"id":"links-show-localhost"} for a wrong address.',
             notes: [
               NETWORK.testModeRule,
               "Use a real, unique customer id: a new link cancels that customer's other open links.",
@@ -477,9 +520,26 @@ cat ~/.payraminfo/root-credentials.env   # hand these to the human over a privat
     });
   }
 
+  if (access === 'human_runs_commands') {
+    for (const phase of phases) {
+      for (const st of phase.steps) {
+        if (st.executor !== 'agent_shell') continue;
+        st.executor = 'human_shell';
+        if (st.expect) {
+          st.notes = [
+            ...(st.notes ?? []),
+            'Paste the output back here so it can be checked against "Expect".',
+          ];
+        }
+      }
+    }
+  }
+
   const summary = [
     `${agent ? 'Headless agent' : 'Human'} setup on ${network}${domain ? ` for ${publicUrl}` : ''} (${role}, first wallet: ${wallet.replace('_', ' ')}).`,
-    `Steps marked human/human_dashboard or with a gate need the human; everything else the agent can run over SSH.`,
+    access === 'ssh'
+      ? 'Steps marked human/human_dashboard or with a gate need the human; everything else the agent can run over SSH. If you cannot run commands on the server yourself, ask again with access "human_runs_commands".'
+      : 'You cannot run commands on the server, so every command is marked for the human to run and paste back. Go one step at a time and check each result against "Expect".',
     stage !== 'fresh' ? `Starting after stage "${stage}".` : '',
   ]
     .filter(Boolean)
@@ -520,7 +580,7 @@ export const registerSetupPlanTool = (server: McpServer) => {
     {
       title: 'Plan a PayRam install (step by step)',
       description:
-        'Start here to install PayRam on a VPS. Returns an ordered, personalised plan — prepare server → install → claim admin + set public URL → wallets (incl. Smart Bridge review) → API key + first payment link → hardening → store/app integration — with who runs each step (agent shell vs human/dashboard), exact commands, what success looks like, and hard stops that need the human (cold wallet, mainnet spend, root-only settings). Pass stage to resume mid-way.',
+        'Start here to install PayRam on a VPS. Returns an ordered, personalised plan — prepare server → install → claim admin + set public URL → wallets (incl. Smart Bridge review) → API key + first payment link → hardening → store/app integration — with who runs each step (agent shell vs human/dashboard), exact commands, what success looks like, and hard stops that need the human (cold wallet, mainnet spend, root-only settings). Ask the user first whether you can run commands on their server (access "ssh") or only chat with them (access "human_runs_commands": they run each command and paste the output back). Pass stage to resume mid-way; payram_doctor tells you the stage of a running server.',
       inputSchema: inputSchema,
       outputSchema,
     },

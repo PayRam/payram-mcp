@@ -20,6 +20,7 @@ const PLAN_VARIANTS = [
   { wallet: 'btc' as const, integration: 'shopify' as const },
   { integration: 'woocommerce' as const, stage: 'installed' as const },
   { integration: 'website' as const, stage: 'wallet_ready' as const },
+  { access: 'human_runs_commands' as const, domain: 'pay.example.com' },
 ];
 
 const allGuideText = (): string =>
@@ -105,6 +106,46 @@ describe('payram_setup_plan', () => {
 
   it('warns when Let’s Encrypt is chosen without a domain', () => {
     expect(buildSetupPlan({ ssl: 'letsencrypt' }).warnings.join(' ')).toMatch(/needs a domain/);
+  });
+});
+
+describe('payram_setup_plan for users without shell access', () => {
+  const steps = (plan: ReturnType<typeof buildSetupPlan>) => plan.phases.flatMap((p) => p.steps);
+
+  it('hands every server command to the human and asks for the output back', () => {
+    const plan = buildSetupPlan({ access: 'human_runs_commands' });
+    expect(steps(plan).some((s) => s.executor === 'agent_shell')).toBe(false);
+    const install = steps(plan).find((s) => s.id === 'install');
+    expect(install?.executor).toBe('human_shell');
+    expect(renderSetupPlan(plan)).toMatch(/pastes the output back/);
+    expect(plan.summary).toMatch(/cannot run commands/);
+  });
+
+  it('keeps agent shell steps for the default ssh access', () => {
+    const plan = buildSetupPlan({});
+    expect(steps(plan).some((s) => s.executor === 'agent_shell')).toBe(true);
+    expect(plan.summary).toMatch(/human_runs_commands/);
+  });
+});
+
+describe('payram_setup_plan checks and recovery', () => {
+  const steps = (plan: ReturnType<typeof buildSetupPlan>) => plan.phases.flatMap((p) => p.steps);
+
+  it('checks the server before installing and says what to do when a step fails', () => {
+    const plan = buildSetupPlan({});
+    expect(steps(plan).find((s) => s.id === 'preflight')?.commands).toMatch(/os-release/);
+    for (const id of ['preflight', 'install', 'verify_install', 'site_url', 'payment_link']) {
+      expect(steps(plan).find((s) => s.id === id)?.ifItFails, id).toBeTruthy();
+    }
+    expect(renderSetupPlan(plan)).toMatch(/If it fails:/);
+  });
+
+  it('verifies, rather than repeats, what the one-step flow already did', () => {
+    const fresh = steps(buildSetupPlan({ wallet: 'usdc_base' }));
+    expect(fresh.find((s) => s.id === 'scw')?.commands).toMatch(/ONLY if/);
+    expect(fresh.find((s) => s.id === 'api_key')?.commands).toMatch(/ONLY if/);
+    const resumed = steps(buildSetupPlan({ stage: 'installed', wallet: 'usdc_base' }));
+    expect(resumed.find((s) => s.id === 'scw')?.commands).not.toMatch(/ONLY if/);
   });
 });
 

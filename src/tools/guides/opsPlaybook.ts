@@ -357,11 +357,12 @@ curl -s -X POST "$PAYRAM_URL/api/v1/external-platform/$PROJECT_ID/payment/search
 # 5. Deposits PayRam saw but could not match to a payment:
 curl -s "$PAYRAM_URL/api/v1/missed-deposit" ${H_JWT} | jq '.' | head -60`,
     interpret: [
+      'OPEN with an empty depositAddress / currency / blockchain → the customer has not chosen a network and currency on the checkout page yet, so no deposit can be matched. Ask them to open the link and pick one; do not look for a missing deposit yet.',
       'OPEN + listener lagging → wait or fix the listener (node_sync).',
       'OPEN + tx not found after the listener caught up → the customer paid to a different address/network or with an unsupported token; check the tx on a block explorer.',
       'FILLED here but not in the shop → a webhook problem: recipe "webhooks" and check the shop\'s webhook endpoint logs.',
       'PARTIALLY_FILLED → the customer sent less than requested (fees, wrong amount).',
-      'A missed deposit that belongs to this customer can be credited by a human in the dashboard.',
+      'A missed deposit that belongs to this customer can be credited by a human in the dashboard. Reporting a transaction as missed records it but has not always filled the original payment: send the support team the transaction hash if the payment stays OPEN.',
     ],
     pitfalls: [
       'Paying on a Smart Bridge rail settles as Base USDC: look for the payment under BASE.',
@@ -385,7 +386,7 @@ curl -s "$PAYRAM_URL/api/v1/missed-deposit" ${H_JWT} | jq '.' | head -60`,
     ],
     pitfalls: [
       'Creating a payment CANCELS every other open payment of the same customerID in this project. Use the real customer id; never reuse a shared/test id against a live store.',
-      'HTTP 500 {"code":5} → the project needs exactly one linked deposit wallet (none or several fails), or the site URL is unset. Check Project → Wallet and recipe "site_url".',
+      '{"code":5} → the project needs exactly one linked deposit wallet (none or several fails), or the site URL is unset. Check Project → Wallet and recipe "site_url". It can arrive with HTTP 200 or 500: read the body, not just the status.',
       'HTTP 400 {"code":3} → customerEmail missing or invalid.',
       'If the url starts with http://localhost, fix the site URL first (recipe "site_url").',
     ],

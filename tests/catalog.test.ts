@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { PLAYBOOK_FOR_TOOL } from '../src/tools/guides/opsPlaybook.js';
 import { textOf, withClient, type Era } from './helpers.js';
 
-const GUIDE_TOOLS = ['payram_setup_plan', 'payram_doctor', 'payram_runbook', 'payram_ops_playbook'];
+const GUIDE_TOOLS = [
+  'payram_setup_plan',
+  'payram_doctor',
+  'payram_troubleshoot',
+  'payram_runbook',
+  'payram_ops_playbook',
+];
 const WRITE_TOOLS = ['create_payment_link', 'restart_payram_worker'];
 const LOCAL_ONLY = [
   'assess_payram_project',
@@ -27,7 +33,7 @@ describe.each<Era>(['modern', 'legacy'])('tool catalog over the %s protocol era'
   it('lists start-here tools first, with valid names and full annotations', () =>
     withClient(era, async (client) => {
       const { tools } = await client.listTools();
-      expect(tools.slice(0, 4).map((t) => t.name)).toEqual(GUIDE_TOOLS);
+      expect(tools.slice(0, GUIDE_TOOLS.length).map((t) => t.name)).toEqual(GUIDE_TOOLS);
       const names = tools.map((t) => t.name);
       expect(new Set(names).size).toBe(names.length);
       for (const tool of tools) {
