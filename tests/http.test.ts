@@ -1,7 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { configureApp } from '../src/app.js';
+import { configureApp } from '../src/configureApp.js';
 
 const ACCEPT = 'application/json, text/event-stream';
 const init = {

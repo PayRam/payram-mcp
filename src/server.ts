@@ -1,5 +1,5 @@
 import express from 'express';
-import { configureApp } from './app.js';
+import { configureApp } from './configureApp.js';
 import {
   getBindHost,
   getServerPort,
@@ -11,7 +11,9 @@ import { getOptionalPayramAccessToken, getOptionalPayramApiKey } from './config/
 import { MCP_SERVER_VERSION } from './generated/buildInfo.js';
 import { logger } from './utils/logger.js';
 
-// Entry point. Vercel detects this file (it imports express and listens).
+// Entry point. Vercel detects this file (it imports express and listens). Keep it the only
+// src/app|index|server file: Vercel treats any of them as the entrypoint and requires a default
+// export from it, so a second one takes the whole function down (see tests/entrypoint.test.ts).
 const app = configureApp(express());
 const port = getServerPort();
 
