@@ -11,6 +11,10 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # The DNS key can publish anything under com.payram/*, so it lives in this environment
+    # (limited to v* tags), not in a repo-wide secret. A job only sees an environment secret
+    # when it names the environment.
+    environment: mcp-registry-publish
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
