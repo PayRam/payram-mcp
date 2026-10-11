@@ -40,9 +40,9 @@ export const registerTestConnectionTool = (server: McpServer) => {
   server.registerTool(
     'test_payram_connection',
     {
-      title: 'Test PayRam connectivity',
+      title: 'Test PayRam connectivity (deprecated)',
       description:
-        'Read-only check that a PayRam server is reachable and healthy and, if an API key is supplied, that the key is accepted. Never creates payments. For a full diagnosis use payram_doctor.',
+        'Deprecated: use payram_doctor, which does this and more. Read-only check that a PayRam server is reachable and healthy and, if an API key is supplied, that the key is accepted. Never creates payments.',
       inputSchema,
       outputSchema,
     },

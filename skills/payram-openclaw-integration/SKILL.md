@@ -89,7 +89,7 @@ Webhook `status` values: `OPEN`, `PARTIALLY_FILLED`, `FILLED`, `OVER_FILLED`, `C
 - **Signing:** every webhook is signed. `X-Payram-Signature` is `sha256=` plus the hex HMAC-SHA256 of the raw body, keyed with the project API key (the newest active one). There is no separate webhook secret.
 - **Verify:** compute the HMAC over the raw body and compare in constant time.
 - **Amounts:** they are decimal strings.
-- **Payout ping:** answer the unsigned ping (`X-Webhook-Test: true`) with 200.
+- **Payout ping:** answer the signed test ping (`X-Webhook-Test: true`, no `reference_id`) with 200.
 
 See `payram-webhook-integration` for handler code.
 

@@ -1,7 +1,7 @@
 import { SnippetResponse } from '../../common/snippetTypes.js';
 
 const notes =
-  'Uses the Payram JS SDK (docs/js-sdk.md) inside an Express router so your backend never shells out raw HTTP calls.';
+  'Uses the Payram JS SDK inside an Express router so your backend never shells out raw HTTP calls.';
 
 export const buildExpressPaymentRouteSnippet = (): SnippetResponse => ({
   title: 'Express route for Payram create-payment API',

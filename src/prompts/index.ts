@@ -29,9 +29,9 @@ export const registerPrompts = (server: McpServer) => {
     },
     async (args) =>
       userText(`Help me set up PayRam${args.domain ? ` at ${args.domain}` : ''}${args.network ? ` on ${args.network}` : ''}.
-1. Ask me anything payram_setup_plan needs that I have not said (domain, testnet or mainnet, human dashboard or headless agent, first wallet: USDC on Base or BTC, merchant or operator, and whether a store/app will connect).
+1. Ask me anything payram_setup_plan needs that I have not said: whether you can run commands on my server over SSH or I will run them and paste the output back (access), domain, testnet or mainnet, human dashboard or headless agent, first wallet (USDC on Base or BTC), merchant or operator, and whether a store/app will connect.
 2. Call payram_setup_plan and walk me through it one phase at a time. Run the agent steps over SSH only when I have given you access; stop at every step marked HUMAN or STOP and tell me exactly what to do.
-3. After install, call payram_doctor with the public URL and fix anything it reports.
+3. After install, call payram_doctor with the public URL and fix anything it reports. If any step fails, call payram_troubleshoot with the error text (without keys or passwords).
 4. Finish with backups and the daily check (payram_runbook "backup", payram_ops_playbook "daily_check").`),
   );
 
@@ -80,7 +80,7 @@ Keep the API key server-side only.`),
     },
     async (args) =>
       userText(`Help me troubleshoot a PayRam payment problem.${args.issue ? ` Issue: ${args.issue}.` : ''}
-1. Call payram_doctor${args.server ? ` with baseUrl ${args.server}` : ' with my PayRam URL (ask me for it)'}.
+1. Call payram_troubleshoot with what is happening (and the exact error text if there is one), then payram_doctor${args.server ? ` with baseUrl ${args.server}` : ' with my PayRam URL (ask me for it)'}.
 2. Follow payram_ops_playbook "stuck_payment" (and "node_sync", "workers", "webhooks" as it suggests), running the calls with my credentials on my machine.
 3. Tell me the most likely cause and the fix. Do not create new payment links for the affected customer while investigating, and do not restart anything without my OK.`),
   );

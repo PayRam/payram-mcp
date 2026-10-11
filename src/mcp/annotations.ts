@@ -1,4 +1,7 @@
 import type { McpServer, ToolAnnotations } from '@modelcontextprotocol/server';
+import { withReadableText } from './resultText.js';
+
+type ToolResultLike = Parameters<typeof withReadableText>[0];
 
 /**
  * Tool annotation policy. Hosts use these hints to decide what to auto-run
@@ -52,7 +55,7 @@ const EXPLICIT: Record<string, ToolAnnotations> = {
 
 /** Name patterns of pure content/codegen tools (no network, no state). */
 const CONTENT_NAME =
-  /^(generate_|snippet_|explain_|get_payram_|get_referral_|get_agent_|list_payram_docs$|suggest_|scaffold_|assess_|prepare_|onboard_|payram_setup_plan$|payram_runbook$|payram_ops_playbook$)/;
+  /^(generate_|snippet_|explain_|get_payram_|get_referral_|get_agent_|list_payram_docs$|suggest_|scaffold_|assess_|prepare_|onboard_|payram_setup_plan$|payram_troubleshoot$|payram_runbook$|payram_ops_playbook$)/;
 
 export const annotationsFor = (name: string): ToolAnnotations => {
   const explicit = EXPLICIT[name];
@@ -64,22 +67,26 @@ export const annotationsFor = (name: string): ToolAnnotations => {
 };
 
 /**
- * Make every registerTool call on this instance carry annotations: the
- * tool's own (if given) layered over the policy.
+ * Make every registerTool call on this instance carry annotations (the tool's
+ * own, if given, layered over the policy) and return readable text even when
+ * the payload is structured (see resultText.ts).
  */
-export const applyAnnotationPolicy = (server: McpServer): void => {
+export const applyToolPolicy = (server: McpServer): void => {
   const original = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
   (server as unknown as { registerTool: (...args: unknown[]) => unknown }).registerTool = (
     name: unknown,
     config: unknown,
     cb: unknown,
   ) => {
+    const handler = cb as (...args: unknown[]) => Promise<ToolResultLike>;
     const cfg = (config ?? {}) as { annotations?: ToolAnnotations; title?: string };
     const annotations: ToolAnnotations = {
       ...(cfg.annotations ? {} : annotationsFor(String(name))),
       ...(cfg.title ? { title: cfg.title } : {}),
       ...cfg.annotations,
     };
-    return original(name, { ...cfg, annotations }, cb);
+    return original(name, { ...cfg, annotations }, async (...args: unknown[]) =>
+      withReadableText(await handler(...args)),
+    );
   };
 };

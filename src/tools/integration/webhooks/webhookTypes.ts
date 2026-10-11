@@ -10,9 +10,19 @@ export interface PayramWebhookPayload {
   customer_id?: string;
   customer_email?: string;
   status: PayramWebhookStatus;
-  amount?: number;
-  filled_amount_in_usd?: number;
-  currency?: string; // 3-letter ISO code
+  amount?: string; // decimal string
+  filled_amount?: string; // decimal string
+  filled_amount_in_usd?: string; // decimal string
+  currency?: string; // crypto ticker, e.g. USDC
+  timestamp?: number; // unix seconds
+  confirmation_current?: number;
+  confirmation_required?: number;
+  payment_info?: {
+    source_address?: string;
+    transaction_hash?: string;
+    destination_address?: string;
+    block_number?: number;
+  }[];
   [key: string]: unknown;
 }
 

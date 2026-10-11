@@ -31,13 +31,12 @@ export const explainHttpStatus = (status: number): string => {
  * before the generic status hint so the message names the real cause.
  */
 const explainHttpBody = (status: number, body: string): string => {
-  if (status !== 500) return '';
   const b = body.toLowerCase();
-  if (b.includes('supervisorctl')) {
+  if (status === 500 && b.includes('supervisorctl')) {
     return 'This host has no supervisord (workers are not process-managed) - a worker restart is a no-op here. Worker status/restart tools do not apply to this install.';
   }
   if (b.includes('"code":5') || b.includes('error occurred while creating the payment request')) {
-    return 'Payment creation failed - usually no deposit wallet is linked yet (run payram_doctor / deploy-scw-flow), or the server URL config is unset (older agent scripts wrote deleted payram.frontend/backend keys; a current install sets payram.server.url via POST /system/site-url).';
+    return 'Payment creation failed (this error can arrive with HTTP 200, so read the body) - usually no deposit wallet is linked yet (run payram_doctor / deploy-scw-flow), or the server URL config is unset (older agent scripts wrote deleted payram.frontend/backend keys; a current install sets payram.server.url via POST /system/site-url).';
   }
   return '';
 };

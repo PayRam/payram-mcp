@@ -31,6 +31,7 @@ No API key is required to connect. This hosted server never holds your PayRam cr
 
 - **Install** PayRam on a VPS step by step: \`payram_setup_plan\`
 - **Check** a running server by URL: \`payram_doctor\`
+- **Fix a problem** from a description or a pasted error: \`payram_troubleshoot\`
 - **Administer** (SSL, domain, upgrades, backups, chains, Smart Bridge, Shopify, WooCommerce): \`payram_runbook\`
 - **Operate and troubleshoot** through the PayRam API: \`payram_ops_playbook\`
 - Accept USDT, USDC, BTC, ETH, TRX, POL on Bitcoin, Ethereum, Base, Polygon and Tron, plus Solana and BNB Chain via Smart Bridge (settles as USDC on Base)
@@ -1010,7 +1011,7 @@ export const LANDING_HTML = `<!DOCTYPE html>
 
      Skills index: https://mcp.payram.com/.well-known/agent-skills/index.json
      Start with the MCP tools payram_setup_plan (install), payram_doctor (check a server),
-     payram_runbook (admin tasks) and payram_ops_playbook (daily operations).
+     payram_troubleshoot (fix a problem), payram_runbook (admin tasks) and payram_ops_playbook (daily operations).
 
      To connect: Add {"mcpServers":{"payram":{"url":"https://mcp.payram.com/mcp"}}} to your MCP config.
 -->

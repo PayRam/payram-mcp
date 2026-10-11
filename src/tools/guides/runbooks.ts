@@ -10,6 +10,7 @@ import {
   INSTALL,
   LINKS,
   NETWORK,
+  REQUIREMENTS,
   SETUP_MODE,
   SMART_BRIDGE,
   WEBHOOK,
@@ -40,6 +41,10 @@ export const RUNBOOK_TASKS = [
   'shopify_connector',
   'woocommerce_plugin',
   'secure_analytics_mcp',
+  'install_failed',
+  'custom_port_or_proxy',
+  'external_database',
+  'forgot_root_password',
 ] as const;
 
 export type RunbookTask = (typeof RUNBOOK_TASKS)[number];
@@ -50,7 +55,7 @@ const runbookSchema = z.object({
   when: z.string(),
   steps: z.array(
     z.object({
-      who: z.enum(['agent_shell', 'human', 'human_dashboard']),
+      who: z.enum(['agent_shell', 'agent_http', 'human', 'human_dashboard']),
       do: z.string(),
       commands: z.string().optional(),
       gate: z.string().optional(),
@@ -516,6 +521,143 @@ ${INSTALL.restart}`,
       `The plugin requires the signature (${WEBHOOK.signature}); the key is ${WEBHOOK.signingKey}. "invalid HMAC signature" means the plugin has a different key.`,
       'With "Plain" permalinks /wp-json/ is not available; use pretty permalinks.',
       'Do not press the PayRam webhook "Test" button while the endpoint returns 404/405 — it deactivates the webhook.',
+    ],
+  },
+
+  install_failed: {
+    title: 'The install did not finish',
+    when: 'The installer printed an error, stopped, or the dashboard never came up.',
+    steps: [
+      {
+        who: 'agent_shell',
+        do: 'Collect the facts in one read-only pass.',
+        commands: `cat /etc/os-release | head -3; uname -m; bash --version | head -1
+df -h / | tail -1; free -m | sed -n 2p
+docker --version
+sudo ss -ltnp | grep -E ':(80|443)\\b' || echo "80/443 are free"
+curl -sI https://payram.com/setup_payram.sh | head -1`,
+      },
+      {
+        who: 'agent_shell',
+        do: 'Read the end of the installer log and see whether a container was created.',
+        commands: `tail -n 60 ${CONTAINER.logs.installer}
+docker ps -a --filter name=${CONTAINER.name}
+docker logs --tail 50 ${CONTAINER.name} 2>&1 | tail -50`,
+      },
+      {
+        who: 'agent_http',
+        do: 'Call payram_troubleshoot with the key error lines (remove keys, tokens and passwords first). Most install failures are listed there with their fix.',
+      },
+      {
+        who: 'human',
+        do: `If the server is below the minimum (${REQUIREMENTS.server}) or on an unsupported OS, use a different server; fixing around it rarely works.`,
+      },
+      {
+        who: 'agent_shell',
+        do: 'After the cause is fixed, run the installer again from a real terminal (ssh -t).',
+        commands: INSTALL.installer,
+        gate: 'If a payram container already exists, do not reset: use the installer menu or --restart. Reset commands delete the database, AES key and wallet secrets.',
+      },
+    ],
+    verify: [
+      'payram_doctor with the server URL passes',
+      `${CONTAINER.supervisorctl} shows the programs RUNNING`,
+    ],
+    warnings: [
+      'Never paste the contents of ~/.payraminfo/ into a chat: it holds credentials and the wallet mnemonic.',
+    ],
+  },
+
+  custom_port_or_proxy: {
+    title: 'Run PayRam behind your own reverse proxy or on another port',
+    when: 'Port 80/443 is taken, you use Cloudflare or another proxy, or you must follow a fixed network layout.',
+    steps: [
+      {
+        who: 'human',
+        do: 'Prefer a dedicated server on 80/443 with the proxy elsewhere. If that is impossible, decide the public address (domain and port) everything will use.',
+      },
+      {
+        who: 'agent_shell',
+        do: 'Check what PayRam publishes and that it answers locally.',
+        commands: `docker port ${CONTAINER.name}
+curl -s http://localhost/api/v1/health`,
+      },
+      {
+        who: 'human',
+        do: 'Configure the proxy: forward every path (including /api/) to http://<server>:80, keep the Host header, send X-Forwarded-Proto: https and X-Forwarded-For, and do not rewrite paths.',
+      },
+      {
+        who: 'agent_shell',
+        do: 'Tell PayRam the proxy terminates TLS (installer menu: SSL → external proxy).',
+        commands: INSTALL.sslMenu,
+        gate: 'Brief downtime while the container is recreated.',
+      },
+      {
+        who: 'human_dashboard',
+        do: `Re-save ${DASHBOARD_PAGES.siteUrl} from the public address (including the port if it is not 80/443), and use the same address for webhook URLs.`,
+      },
+    ],
+    verify: ['payram_doctor with the public URL passes', 'A test payment link opens from outside'],
+    warnings: [
+      "Cloudflare 'Flexible' SSL causes redirect loops: use Full or Full (strict).",
+      "Let's Encrypt needs port 80 on the server; behind a proxy let the proxy hold the certificate.",
+      'Cloudflare 521/522/523/524 mean the proxy cannot reach the origin: check the cloud firewall and that the container is up.',
+    ],
+  },
+
+  external_database: {
+    title: 'Use your own Postgres',
+    when: 'You want the database on a managed service or a separate machine.',
+    steps: [
+      {
+        who: 'human',
+        do: `Provision Postgres (${REQUIREMENTS.externalDb}) on a private network, create an empty database and a user for PayRam, and allow connections only from the PayRam server.`,
+        gate: 'Database credentials belong to the owner: they type them into the installer, never into a chat.',
+      },
+      {
+        who: 'agent_shell',
+        do: 'Run the installer and answer the database question with your own Postgres (host, port, database, user, password).',
+        commands: INSTALL.installer,
+        gate: 'Choose this at install time. Moving an existing install onto an external database is not a documented path: ask the PayRam team first.',
+      },
+      {
+        who: 'agent_shell',
+        do: 'Confirm the choice was recorded and the server is healthy.',
+        commands: `grep -i db ~/.payraminfo/config.env | sed 's/=.*/=<set>/'
+curl -s http://localhost/api/v1/health | jq '{status, db}'`,
+      },
+    ],
+    verify: ['health shows status ok and db ok', 'payram_doctor passes'],
+    warnings: [
+      'Redis is bundled in the container; there is no documented external Redis option.',
+      'Back up the database together with ~/.payraminfo/aes/ (payram_runbook "backup").',
+      `Anything beyond this (multi-node, external Redis): ask the team at ${LINKS.community}.`,
+    ],
+  },
+
+  forgot_root_password: {
+    title: 'Regain access to the root account',
+    when: 'Nobody can sign in to the dashboard.',
+    steps: [
+      {
+        who: 'human_dashboard',
+        do: 'If SMTP is configured, use the password reset link on the sign-in page.',
+      },
+      {
+        who: 'agent_shell',
+        do: 'Agent-CLI installs saved the credentials the installer created. Check that the file exists; hand its contents to the owner privately.',
+        commands: 'ls -l ~/.payraminfo/root-credentials.env',
+        gate: 'Do not print the file into a chat or log.',
+      },
+      {
+        who: 'human',
+        do: 'If neither works, ask the PayRam team before doing anything else.',
+      },
+    ],
+    verify: ['The owner can sign in and has changed the password'],
+    warnings: [
+      'Never run reset-local or reinstall to recover a password: it deletes the database, AES key and wallet secrets.',
+      `Support and community: ${LINKS.community}`,
     ],
   },
 

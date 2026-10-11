@@ -169,7 +169,14 @@ export const createPaymentLink = async (params: CreatePaymentLinkParams): Promis
     throw new Error(apiErrorMessage('Create payment link', response.status, body));
   }
 
-  return (await response.json()) as PaymentLink;
+  // Payment creation can answer HTTP 200 with an error body like {"code":5,"message":...}.
+  const result = (await response.json()) as PaymentLink & { code?: number };
+  if (typeof result.code === 'number' && !result.url) {
+    throw new Error(
+      apiErrorMessage('Create payment link', response.status, JSON.stringify(result)),
+    );
+  }
+  return result;
 };
 
 /**

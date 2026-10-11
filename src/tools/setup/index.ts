@@ -181,7 +181,7 @@ export const registerSetupTools = (server: McpServer) => {
     {
       title: 'Get the headless agent guide (full reference)',
       description:
-        'Returns the canonical PayRam headless-agent guide (payram-scripts PAYRAM_HEADLESS_AGENT.md): agent CLI commands, env vars, merchant vs operator mode, wallet flows, adding chains, troubleshooting. Long (~11k tokens). For a short personalised plan use payram_setup_plan.',
+        'Returns the canonical PayRam headless-agent guide: agent CLI commands, env vars, merchant vs operator mode, wallet flows, adding chains, troubleshooting. Long (~11k tokens). For a short personalised plan use payram_setup_plan.',
       inputSchema: agentSetupGuideSchemas.input,
       outputSchema: agentSetupGuideSchemas.output,
     },
@@ -200,13 +200,16 @@ export const registerSetupTools = (server: McpServer) => {
       { toolName: 'get_agent_setup_flow' },
     ),
   );
+};
 
+/** Older entry points kept working but listed last; each says what replaced it. */
+export const registerLegacySetupTools = (server: McpServer) => {
   server.registerTool(
     'onboard_agent_setup',
     {
-      title: 'Onboard: install PayRam as an agent',
+      title: 'Onboard: install PayRam as an agent (deprecated)',
       description:
-        'Quick start for an agent installing PayRam on a VPS: returns the default headless plan (testnet, USDC on Base) with exact commands and the human hand-offs. Same as payram_setup_plan with defaults; call that tool to personalise (domain, mainnet, BTC, operator, Shopify/WooCommerce).',
+        'Deprecated: use payram_setup_plan, which does this and lets you personalise it. Returns the default headless plan (testnet, USDC on Base).',
       inputSchema: agentSetupGuideSchemas.input,
       outputSchema: agentSetupGuideSchemas.output,
     },

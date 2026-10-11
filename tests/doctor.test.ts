@@ -113,3 +113,66 @@ describe('payram_doctor', () => {
     expect(seen).toHaveLength(0);
   });
 });
+
+describe('payram_doctor input and failure handling', () => {
+  it('accepts a bare host:port, trying https then http', async () => {
+    const bare = base.replace('http://', '');
+    const out = await runDoctor({ baseUrl: bare });
+    expect(out.healthy).toBe(true);
+    expect(out.baseUrl).toBe(base);
+    expect(out.warnings.join(' ')).toMatch(/No scheme given/);
+  });
+
+  it('ignores a dashboard path and says so', async () => {
+    const out = await runDoctor({ baseUrl: `${base}/dashboard/settings` });
+    expect(out.healthy).toBe(true);
+    expect(out.warnings.join(' ')).toMatch(/Ignored the path \/dashboard\/settings/);
+  });
+
+  it('sends a healthy server on to the setup plan and a broken one to the troubleshooter', async () => {
+    const healthy = await runDoctor({ baseUrl: base });
+    expect(healthy.setupStage).toBe('installed');
+    expect(healthy.nextCall?.tool).toBe('payram_setup_plan');
+
+    health = { status: 'ok', db: 'ok', workers: { 'base-listener': 'FATAL' } };
+    const down = await runDoctor({ baseUrl: base });
+    expect(down.nextCall).toEqual({
+      tool: 'payram_troubleshoot',
+      arguments: { id: 'worker-down' },
+    });
+  });
+
+  it('tells a refused connection from a timeout and shows the port probe', async () => {
+    const out = await runDoctor({ baseUrl: 'http://127.0.0.1:1' });
+    expect(out.failedStage).toBe('reachability');
+    expect(out.findings.find((f) => f.check === 'ports')?.detail).toMatch(/refused/);
+    expect(out.likelyCauses[0].cause).toMatch(/Nothing is listening|Nothing listens/);
+    expect(out.nextCall?.arguments).toEqual({ id: 'dashboard-unreachable' });
+  });
+
+  it('does not blame the container for a DNS failure', async () => {
+    const out = await runDoctor({ baseUrl: 'https://payram-doctor-test.invalid' });
+    expect(out.likelyCauses.map((c) => c.cause).join(' ')).not.toMatch(/container/);
+    expect(out.nextCall?.arguments).toEqual({ id: 'dns-not-pointing' });
+  });
+
+  it('recognises Cloudflare origin errors and gateway errors', async () => {
+    const cloudflare = await startMockServer((_req, res) => {
+      res.writeHead(522, { 'cf-ray': 'abc', server: 'cloudflare' }).end('error 522');
+    });
+    const gateway = await startMockServer((_req, res) => {
+      res.writeHead(502).end('<html>Bad Gateway</html>');
+    });
+    try {
+      const cf = await runDoctor({ baseUrl: cloudflare.base });
+      expect(cf.likelyCauses[0].cause).toMatch(/Cloudflare/);
+      expect(cf.nextCall?.arguments).toEqual({ id: 'cloudflare-or-proxy-errors' });
+      const bad = await runDoctor({ baseUrl: gateway.base });
+      expect(bad.likelyCauses[0].cause).toMatch(/502/);
+      expect(bad.nextCall?.arguments).toEqual({ id: 'gateway-5xx' });
+    } finally {
+      cloudflare.close();
+      gateway.close();
+    }
+  });
+});

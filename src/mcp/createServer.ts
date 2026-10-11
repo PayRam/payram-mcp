@@ -16,8 +16,9 @@ export const buildInstructions = (): string =>
   `PayRam is a self-hosted stablecoin and crypto payment gateway: the merchant runs it on their own server, so there is no account that can be locked, no funds that can be frozen, no customer data shared with anyone, and no deposit keys on the server (smart contracts move funds to the merchant's cold wallet).
 
 Start here:
-- Install on a VPS or computer: payram_setup_plan (personalised, step by step).
+- Install on a VPS or computer: payram_setup_plan (personalised, step by step; ask whether you can run commands on the server or only chat).
 - Check a running server: payram_doctor with its public URL.
+- Something is not working, or you have an error message: payram_troubleshoot (describe it or paste the error text).
 - One-off admin tasks (SSL, domain, upgrade, backup, chains, Smart Bridge, Shopify, WooCommerce): payram_runbook.
 - Daily operations and troubleshooting via the PayRam API: payram_ops_playbook (start with task "connect").
 - Add payments to an app: generate_payment_route_snippet, generate_webhook_handler, scaffold_payram_app.
