@@ -334,6 +334,8 @@ export const ISSUES: readonly Issue[] = [
       'failed authorization',
       'timeout during connect',
       'certbot',
+      'ssl certificate',
+      'https not working',
       'unauthorized :: invalid response',
     ],
     meaning:
