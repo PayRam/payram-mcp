@@ -22,6 +22,105 @@ const containsSign = (text: string, sign: string): boolean =>
     ? new RegExp(`(?<![a-z0-9])${escapeRegExp(sign)}(?![a-z0-9])`).test(text)
     : text.includes(sign);
 
+const NEGATION = new Set([
+  'not',
+  'no',
+  'never',
+  'cant',
+  'cannot',
+  'wont',
+  'doesnt',
+  'dont',
+  'isnt',
+  'arent',
+  'wasnt',
+  'fail',
+  'failed',
+  'failing',
+  'stuck',
+  'broken',
+  'error',
+  'unable',
+  'without',
+  'missing',
+]);
+/** Words that say little about which problem it is ("sweep not working" = "sweep not happening"). */
+const FILLER = new Set([
+  'a',
+  'an',
+  'the',
+  'my',
+  'is',
+  'are',
+  'was',
+  'be',
+  'being',
+  'been',
+  'to',
+  'of',
+  'in',
+  'on',
+  'it',
+  'i',
+  'and',
+  'or',
+  'for',
+  'with',
+  'work',
+  'happen',
+  'run',
+  'start',
+  'load',
+  'move',
+  'show',
+  'get',
+  'come',
+  'go',
+  'reach',
+  'open',
+  'access',
+  'connect',
+  'see',
+  'find',
+  'use',
+  'do',
+  'does',
+  'did',
+  'why',
+  'how',
+  'when',
+  'still',
+  'again',
+  'properly',
+  'correctly',
+]);
+const IRREGULAR: Record<string, string> = {
+  swept: 'sweep',
+  kept: 'keep',
+  sent: 'send',
+  paid: 'pay',
+};
+
+const stem = (word: string): string => {
+  const w = word.replace(/'/g, '');
+  if (IRREGULAR[w]) return IRREGULAR[w];
+  if (NEGATION.has(w)) return 'NEG';
+  const base =
+    w.length > 5 ? w.replace(/(?:ing|ed|es|s)$/, '') : w.length > 3 ? w.replace(/s$/, '') : w;
+  return NEGATION.has(base) ? 'NEG' : base;
+};
+
+const contentTokens = (text: string): Set<string> =>
+  new Set((text.match(/[a-z0-9']+/g) ?? []).map(stem).filter((t) => t === 'NEG' || !FILLER.has(t)));
+
+/** Order and wording-insensitive match: every content word of a multi-word sign appears in the text. */
+const fuzzyContainsSign = (textTokens: Set<string>, sign: string): boolean => {
+  const tokens = contentTokens(sign);
+  return tokens.size >= 2 && [...tokens].every((t) => textTokens.has(t));
+};
+
+const FUZZY_WEIGHT = 3;
+
 const signWeight = (sign: string): number => (sign.length >= 12 ? 4 : sign.length >= 7 ? 3 : 1.5);
 
 const titleWords = (issue: Issue): string[] => [
@@ -30,8 +129,12 @@ const titleWords = (issue: Issue): string[] => [
 
 export const scoreIssue = (issue: Issue, text: string): number => {
   let score = 0;
+  const textTokens = contentTokens(text);
   for (const pattern of issue.patterns ?? []) if (pattern.test(text)) score += 6;
-  for (const sign of issue.signs) if (containsSign(text, sign)) score += signWeight(sign);
+  for (const sign of issue.signs) {
+    if (containsSign(text, sign)) score += signWeight(sign);
+    else if (fuzzyContainsSign(textTokens, sign)) score += FUZZY_WEIGHT;
+  }
   const overlap = titleWords(issue).filter((w) => text.includes(w)).length;
   return score + Math.min(overlap * 0.5, 2);
 };
