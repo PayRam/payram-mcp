@@ -120,9 +120,10 @@ ${
     ? `
 // Webhooks are signed over the raw body, so this route comes before express.json().
 app.post('/api/payram/webhook', express.raw({ type: '*/*' }), (req, res) => {
-  const expected = 'sha256=' + createHmac('sha256', process.env.PAYRAM_API_KEY).update(req.body).digest('hex');
-  const received = req.get('X-Payram-Signature') || '';
-  if (received.length !== expected.length || !timingSafeEqual(Buffer.from(received), Buffer.from(expected))) {
+  const expected = createHmac('sha256', process.env.PAYRAM_API_KEY).update(req.body).digest();
+  const header = req.get('X-Payram-Signature') || '';
+  const received = header.startsWith('sha256=') ? Buffer.from(header.slice(7), 'hex') : Buffer.alloc(0);
+  if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
     return res.status(401).json({ error: 'invalid-signature' });
   }
   console.log('Payram webhook event:', req.get('X-Webhook-Test') === 'true' ? 'test ping' : req.body.toString('utf8'));
@@ -1040,9 +1041,10 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   // The signature covers the exact bytes PayRam sent, so read the body as text and verify first.
   const rawBody = await request.text();
-  const expected = 'sha256=' + createHmac('sha256', process.env.PAYRAM_API_KEY!).update(rawBody).digest('hex');
-  const received = request.headers.get('X-Payram-Signature') ?? '';
-  if (received.length !== expected.length || !timingSafeEqual(Buffer.from(received), Buffer.from(expected))) {
+  const expected = createHmac('sha256', process.env.PAYRAM_API_KEY!).update(rawBody).digest();
+  const header = request.headers.get('X-Payram-Signature') ?? '';
+  const received = header.startsWith('sha256=') ? Buffer.from(header.slice(7), 'hex') : Buffer.alloc(0);
+  if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
     return NextResponse.json({ error: 'invalid-signature' }, { status: 401 });
   }
   if (request.headers.get('X-Webhook-Test') !== 'true') {

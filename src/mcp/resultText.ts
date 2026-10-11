@@ -105,7 +105,12 @@ export const withReadableText = <R extends ToolResultLike>(result: R): R => {
     .filter((c) => c.type === 'text')
     .map((c) => c.text ?? '')
     .join('\n');
-  if (text.length >= 0.25 * JSON.stringify(sc).length) return result;
+  // A short status line can be longer than a short payload, so also check the payload text itself.
+  const payloads = [sc.snippet, sc.markdown, sc.envExample].filter(
+    (p): p is string => typeof p === 'string' && p.length > 0,
+  );
+  const payloadMissing = payloads.some((p) => !text.includes(p));
+  if (!payloadMissing && text.length >= 0.25 * JSON.stringify(sc).length) return result;
   const rendered = renderStructured(sc);
   if (!rendered) return result;
   return {

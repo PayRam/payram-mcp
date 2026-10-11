@@ -121,6 +121,15 @@ describe('payram_setup_plan for users without shell access', () => {
     expect(plan.summary).toMatch(/cannot run commands/);
   });
 
+  it('never asks the human to paste credential output back', () => {
+    const plan = buildSetupPlan({ access: 'human_runs_commands' });
+    const root = steps(plan).find((s) => s.id === 'claim_root');
+    if (root?.executor === 'human_shell') {
+      expect(root.notes?.join(' ')).toMatch(/Do not paste it back/);
+      expect(root.notes?.join(' ')).not.toMatch(/Paste the output back/);
+    }
+  });
+
   it('keeps agent shell steps for the default ssh access', () => {
     const plan = buildSetupPlan({});
     expect(steps(plan).some((s) => s.executor === 'agent_shell')).toBe(true);

@@ -525,7 +525,12 @@ ${INSTALL.agentCmd('create-payment-link')}`
       for (const st of phase.steps) {
         if (st.executor !== 'agent_shell') continue;
         st.executor = 'human_shell';
-        if (st.expect) {
+        if (st.id === 'claim_root') {
+          st.notes = [
+            ...(st.notes ?? []),
+            'This output holds credentials: read it on the server and save it in a password manager. Do not paste it back here.',
+          ];
+        } else if (st.expect) {
           st.notes = [
             ...(st.notes ?? []),
             'Paste the output back here so it can be checked against "Expect".',
