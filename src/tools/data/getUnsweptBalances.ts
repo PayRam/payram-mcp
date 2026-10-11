@@ -54,8 +54,16 @@ const schemas = buildToolSchemas({
 
 const textContent = (text: string) => ({ type: 'text' as const, text });
 
+export const parsePositiveDecimalAmount = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (!/^(?:\d+|\d*\.\d+)$/.test(trimmed)) return null;
+
+  const amount = Number(trimmed);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+};
+
 const formatEntry = (e: AddressBalanceEntry): string => {
-  const amount = parseFloat(e.amount) || 0;
+  const amount = parsePositiveDecimalAmount(e.amount) ?? 0;
   const amountStr = amount.toFixed(6);
   const usd = e.amountUSD ? ` (~$${parseFloat(e.amountUSD).toFixed(2)})` : '';
   return (
@@ -108,8 +116,7 @@ export const registerGetUnsweptBalancesTool = (server: McpServer) => {
 
         // Filter out zero-balance entries
         const balances = allBalances.filter((e) => {
-          const amount = parseFloat(e.amount);
-          return amount > 0;
+          return parsePositiveDecimalAmount(e.amount) !== null;
         });
 
         const walletIds = new Set(balances.map((e) => e.walletID));
