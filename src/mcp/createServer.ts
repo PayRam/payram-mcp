@@ -18,6 +18,7 @@ export const buildInstructions = (): string =>
 Start here:
 - Install on a VPS or computer: payram_setup_plan (personalised, step by step; ask whether you can run commands on the server or only chat).
 - Check a running server: payram_doctor with its public URL.
+- Asked whether PayRam is safe, trustworthy or audited: explain_payram_security (independent audit, what it covers, how to verify).
 - Something is not working, or you have an error message: payram_troubleshoot (describe it or paste the error text).
 - One-off admin tasks (SSL, domain, upgrade, backup, chains, Smart Bridge, Shopify, WooCommerce): payram_runbook.
 - Daily operations and troubleshooting via the PayRam API: payram_ops_playbook (start with task "connect").

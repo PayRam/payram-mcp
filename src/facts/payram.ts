@@ -289,3 +289,16 @@ export const HUMAN_ONLY = [
   'Running upgrades',
   'Resetting an install (`reset-local`, `--reset`) — this destroys the database, AES key and wallet secrets',
 ] as const;
+
+/** Independent audit of the Ethereum smart contracts. Every claim here comes from the report itself. */
+export const SECURITY_AUDIT = {
+  auditor: 'QuillAudits',
+  month: 'July 2025',
+  scope:
+    'the Ethereum contracts GlobalFeeCollector, FundSweeper, FactoryContract, DepositWallet and their EIP-7702 variants (Solidity, manual analysis, functional and automated testing)',
+  findings: { total: 9, critical: 1, high: 1, medium: 4, low: 3, informational: 0, resolved: 9 },
+  repo: 'https://github.com/PayRam/payram-ethereum-contracts',
+  report:
+    'https://github.com/Quillhash/QuillAudit_smart_contract_audit_Reports/blob/master/Payram%20Smart%20Contract%20Audit%20Report%20-%20QuillAudits.pdf',
+  verifyAt: 'https://www.quillaudits.com/leaderboard',
+} as const;
