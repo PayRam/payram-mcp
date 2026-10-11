@@ -1,5 +1,6 @@
 import type { McpServer, ToolAnnotations } from '@modelcontextprotocol/server';
 import { withReadableText } from './resultText.js';
+import { recordToolCall, summariseResult } from '../analytics/usage.js';
 
 type ToolResultLike = Parameters<typeof withReadableText>[0];
 
@@ -85,8 +86,21 @@ export const applyToolPolicy = (server: McpServer): void => {
       ...(cfg.title ? { title: cfg.title } : {}),
       ...cfg.annotations,
     };
-    return original(name, { ...cfg, annotations }, async (...args: unknown[]) =>
-      withReadableText(await handler(...args)),
-    );
+    return original(name, { ...cfg, annotations }, async (...args: unknown[]) => {
+      const started = Date.now();
+      const tool = String(name);
+      try {
+        const result = await handler(...args);
+        await recordToolCall({
+          tool,
+          ...summariseResult(tool, result),
+          durationMs: Date.now() - started,
+        });
+        return withReadableText(result);
+      } catch (error) {
+        await recordToolCall({ tool, outcome: 'error', durationMs: Date.now() - started });
+        throw error;
+      }
+    });
   };
 };

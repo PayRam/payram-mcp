@@ -62,12 +62,12 @@ export const LANDING_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="/favicon.png">
 <!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-GGW57ME89J"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9CSYN2LPLD"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'G-GGW57ME89J');
+  gtag('config', 'G-9CSYN2LPLD');
 </script>
 <title>PayRam MCP — No-Signup, No-KYC Crypto Payments for AI Agents</title>
 <meta name="description" content="Self-hosted, no-signup, no-KYC crypto payment gateway with MCP integration and card-to-crypto checkout. An AI agent can stand up a store and accept payments without registering anywhere. Deposit wallet keys never on the server — a breach can't steal funds. Built for agents and humans.">

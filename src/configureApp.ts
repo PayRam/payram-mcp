@@ -24,6 +24,7 @@ import {
 import { MCP_SERVER_VERSION } from './generated/buildInfo.js';
 import { LANDING_HTML, LANDING_MARKDOWN } from './web/landing.js';
 import { AGENT_DISCOVERY_LINK, MCP_ENDPOINT, buildMcpJson } from './web/discovery.js';
+import { captureRequestInfo } from './analytics/usage.js';
 import { logger } from './utils/logger.js';
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -144,7 +145,16 @@ export const configureApp = (app: express.Express): express.Express => {
 
   for (const route of ['/mcp', '/']) {
     if (hosted) app.options(route, hostedCors);
-    app.post(route, noStore, ...guards, jsonParser, parseErrors, rejectBatch, serveMcp);
+    app.post(
+      route,
+      noStore,
+      captureRequestInfo,
+      ...guards,
+      jsonParser,
+      parseErrors,
+      rejectBatch,
+      serveMcp,
+    );
   }
 
   const methodNotAllowed: express.RequestHandler = (_req, res) => {
