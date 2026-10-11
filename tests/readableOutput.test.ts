@@ -30,6 +30,15 @@ describe('withReadableText', () => {
     expect(withReadableText(result)).toBe(result);
   });
 
+  it('adds a short payload even when the status line is longer than it', () => {
+    const result = withReadableText({
+      content: [{ type: 'text', text: 'Generated the snippet you asked for.' }],
+      structuredContent: { snippet: 'ls' },
+    });
+    expect(result.content).toHaveLength(2);
+    expect(result.content[1]?.text).toContain('ls');
+  });
+
   it('adds the payload when only a status line is present', () => {
     const result = withReadableText({
       content: [{ type: 'text', text: 'Generated.' }],

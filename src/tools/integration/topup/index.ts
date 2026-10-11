@@ -76,11 +76,12 @@ const WEBHOOK_EXPRESS = `import crypto from 'crypto';
 // rule absorbs duplicate, out-of-order, partial-then-full, and overpaid webhooks.
 app.post('/webhooks/payram', express.raw({ type: '*/*' }), async (req, res) => {
   // The signature covers the exact bytes PayRam sent, so verify before parsing.
-  const apiKey = process.env.PAYRAM_API_KEY || '';
-  const expected = 'sha256=' + crypto.createHmac('sha256', apiKey).update(req.body).digest('hex');
+  const apiKey = process.env.PAYRAM_API_KEY;
+  if (!apiKey) return res.status(500).json({ message: 'PAYRAM_API_KEY is not set' }); // never sign with an empty key
+  const expected = crypto.createHmac('sha256', apiKey).update(req.body).digest();
   const got = req.header('X-Payram-Signature') || '';
-  if (got.length !== expected.length ||
-      !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected))) {
+  const received = got.startsWith('sha256=') ? Buffer.from(got.slice(7), 'hex') : Buffer.alloc(0);
+  if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
     return res.status(401).json({ message: 'invalid signature' });
   }
   if (req.header('X-Webhook-Test') === 'true') return res.status(200).json({ message: 'test received' });
