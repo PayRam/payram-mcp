@@ -56,6 +56,24 @@ describe('troubleshooting bank', () => {
     expect(topId(text)).toBe(expected);
   });
 
+  it.each([
+    ['sweep not happening', 'sweep-not-happening'],
+    ['sweeps not working', 'sweep-not-happening'],
+    ['my payments are not being swept to my wallet', 'sweep-not-happening'],
+    ['webhook not firing', 'webhook-not-arriving'],
+    ['cant reach dashboard', 'dashboard-unreachable'],
+    ['ssl certificate failed', 'letsencrypt-failed'],
+  ])('finds "%s" however it is phrased', (symptom, expected) => {
+    expect(findIssues({ symptom })[0]?.issue.id).toBe(expected);
+  });
+
+  it('does not match unrelated pastes on filler words', () => {
+    expect(findIssues({ symptom: 'fatal error: all goroutines are asleep - deadlock!' })).toEqual(
+      [],
+    );
+    expect(findIssues({ symptom: 'how do I change my logo' })).toEqual([]);
+  });
+
   it('does not match on short numbers inside longer ones', () => {
     expect(findIssues({ symptom: 'block 14013 processed' })).toEqual([]);
   });
