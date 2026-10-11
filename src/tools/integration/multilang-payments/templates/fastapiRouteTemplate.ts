@@ -1,7 +1,7 @@
 import { SnippetResponse } from '../../common/snippetTypes.js';
 
 const notes =
-  "FastAPI example that forwards POST /api/pay/create to Payram's /api/v1/payment endpoint from docs/payram-external.yaml.";
+  "FastAPI example that forwards POST /api/pay/create to Payram's /api/v1/payment endpoint.";
 
 export const buildFastapiPaymentRouteSnippet = (): SnippetResponse => ({
   title: 'FastAPI route for Payram create-payment API',

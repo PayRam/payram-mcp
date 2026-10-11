@@ -1,7 +1,7 @@
 import { SnippetResponse } from '../../common/snippetTypes.js';
 
 const notes =
-  'Laravel example built directly from docs/payram-external.yaml /api/v1/payment request/response fields.';
+  'Laravel example built from the documented /api/v1/payment request and response fields.';
 
 export const buildLaravelPaymentRouteSnippet = (): SnippetResponse => ({
   title: 'Laravel controller for Payram create-payment API',

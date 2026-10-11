@@ -16,7 +16,11 @@ webhooks:
   paymentEvent:
     post:
       summary: Payram → Merchant payment lifecycle event
-      description: Payram sends this to your endpoint when payment status changes.
+      description: >
+        Payram sends this to your endpoint when payment status changes. Every request is signed:
+        X-Payram-Signature is sha256=<hex HMAC-SHA256 of the raw body, keyed with the project API key>.
+        A legacy API-KEY header carrying the key itself is still sent for older integrations.
+        Amounts are decimal strings. The same event can be delivered more than once.
       requestBody:
         required: true
         content:
@@ -31,9 +35,9 @@ webhooks:
                   customer_id: cust_789
                   customer_email: a@b.com
                   status: FILLED
-                  amount: 49.99
-                  filled_amount_in_usd: 49.99
-                  currency: USD
+                  amount: "49.99"
+                  filled_amount_in_usd: "49.99"
+                  currency: USDC
       responses:
         "200":
           description: Acknowledge receipt
@@ -41,11 +45,6 @@ webhooks:
             application/json:
               schema:
                 $ref: "#/components/schemas/WebhookAck"
-          headers:
-            API-Key:
-              description: Shared secret used for webhook auth
-              schema:
-                type: string
 components:
   schemas:
     WebhookPayload:
@@ -64,15 +63,33 @@ components:
           type: string
           enum: [OPEN, CANCELLED, FILLED, PARTIALLY_FILLED, OVER_FILLED, UNDEFINED]
         amount:
-          type: number
-          format: double
+          type: string
+          description: Decimal string
+        filled_amount:
+          type: string
+          description: Decimal string
         filled_amount_in_usd:
-          type: number
-          format: double
+          type: string
+          description: Decimal string
         currency:
           type: string
-          minLength: 3
-          maxLength: 3
+          description: Crypto ticker, e.g. USDC
+        timestamp:
+          type: integer
+          description: Unix seconds
+        confirmation_current:
+          type: integer
+        confirmation_required:
+          type: integer
+        payment_info:
+          type: array
+          items:
+            type: object
+            properties:
+              source_address: { type: string }
+              transaction_hash: { type: string }
+              destination_address: { type: string }
+              block_number: { type: integer }
       additionalProperties: true
       required: [reference_id, status]
     WebhookAck:

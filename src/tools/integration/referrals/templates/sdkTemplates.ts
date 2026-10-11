@@ -79,7 +79,7 @@ await logReferralEvent({
     description: 'Links a referee and logs a referral event via payram.referrals.* SDK APIs.',
   },
   notes:
-    'Payloads map directly to RefereeLinkRequest and EventLogRequest in docs/payram-external.yaml. Configure eventKey per your Payram campaign.',
+    'Payloads map directly to RefereeLinkRequest and EventLogRequest. Configure eventKey per your Payram campaign.',
 });
 
 export const buildNodeSdkReferralStatusSnippet = (): SnippetResponse => ({
@@ -121,5 +121,5 @@ await getReferrerStatus({
       'Uses payram.referrals.authenticateReferrer to fetch referrer profile + redirect URL.',
   },
   notes:
-    'Statuses (active/inactive/etc.) and redirectURL follow AuthResponse in payram-external.yaml. Surface these to your UI to show referral progress.',
+    'Statuses (active/inactive/etc.) and redirectURL follow the AuthResponse type. Surface these to your UI to show referral progress.',
 });

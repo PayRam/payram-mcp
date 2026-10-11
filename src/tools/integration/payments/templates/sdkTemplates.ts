@@ -47,11 +47,10 @@ await createCheckout({
     language: 'typescript',
     framework: 'generic-http',
     filenameSuggestion: 'src/payram/payments/createPayment.ts',
-    description:
-      'Create a Payram payment using the official JS/TS SDK exactly as documented in docs/js-sdk.md.',
+    description: 'Create a Payram payment using the official JS/TS SDK.',
   },
   notes:
-    'Populate InitiatePaymentRequest fields per docs/js-sdk.md (customerEmail, customerId, amountInUSD, etc.) before redirecting customers to checkout.url.',
+    'Populate InitiatePaymentRequest fields (customerEmail, customerId, amountInUSD, etc.) before redirecting customers to checkout.url.',
 });
 
 export const buildNodeSdkPaymentStatusSnippet = (): SnippetResponse => ({
@@ -88,8 +87,7 @@ export async function getPaymentStatus(referenceId: string): Promise<PaymentRequ
     language: 'typescript',
     framework: 'generic-http',
     filenameSuggestion: 'src/payram/payments/paymentStatus.ts',
-    description:
-      'Fetch payment status using payram.payments.getPaymentRequest as shown in docs/js-sdk.md.',
+    description: 'Fetch payment status using payram.payments.getPaymentRequest.',
   },
   notes:
     'Store the reference_id returned from initiatePayment and pass it to getPaymentStatus to read paymentState (OPEN, FILLED, etc.).',

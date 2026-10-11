@@ -244,7 +244,7 @@ export const WEBHOOK = {
   verify:
     'Verify the HMAC over the raw request bytes with a constant-time compare, then re-check the payment via GET /api/v1/payment/reference/{id} before fulfilling.',
   amounts: 'Amounts are JSON strings (decimals); currency is a crypto ticker such as USDT.',
-  ping: 'Before payout webhooks PayRam sends an unsigned ping (header X-Webhook-Test: true); answer 2xx.',
+  ping: 'Before payout webhooks PayRam sends a signed test ping (header X-Webhook-Test: true, no reference_id); verify it like any webhook and answer 2xx.',
   retries: '30m, 1h, 2h, 4h, 8h, 24h, 48h',
   cancelled: 'CANCELLED is not delivered by webhook; poll the reference endpoint.',
 } as const;

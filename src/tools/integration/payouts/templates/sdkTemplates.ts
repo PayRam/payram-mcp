@@ -46,7 +46,7 @@ export async function createPayout(payload: CreatePayoutRequest): Promise<Mercha
 // recipient flow (see generate_payout_recipient_flow_snippet).
 await createPayout({
   email: 'merchant@example.com',
-  blockchainCode: 'ethereum', // lowercase chain name: ethereum | bitcoin | tron | base | polygon
+  blockchainCode: 'ETH', // UPPERCASE chain code: ETH | BTC | TRX | BASE | POLYGON
   currencyCode: 'USDC', // uppercase ticker: ETH | BTC | USDC | USDT | POL | TRX | CBBTC
   amount: '125.50',
   toAddress: '0xfeedfacecafebeefdeadbeefdeadbeefdeadbeef',
@@ -63,7 +63,7 @@ await createPayout({
       'Direct (no-OTP) payout via payram.payouts.createPayout → POST /api/v1/withdrawal/merchant.',
   },
   notes:
-    'Direct payout (§5b of merchant-payouts-api.md): no saved recipient, no OTP. `blockchainCode` is the lowercase chain name (ethereum, bitcoin, tron, base, polygon); `currencyCode` is the uppercase ticker. `amount` must be a string to preserve decimal precision. For reusable, OTP-audited beneficiaries use the recipient flow snippet instead.',
+    'Direct payout: no saved recipient, no OTP. `blockchainCode` is the UPPERCASE chain code (ETH, BTC, TRX, BASE, POLYGON); `currencyCode` is the uppercase ticker. `amount` must be a string to preserve decimal precision. For reusable, OTP-audited beneficiaries use the recipient flow snippet instead.',
 });
 
 export const buildNodeSdkPayoutStatusSnippet = (): SnippetResponse => ({
@@ -110,7 +110,7 @@ await getPayoutStatus(120);
 
 export const buildRecipientPayoutFlowSnippet = (): SnippetResponse => ({
   title: 'Payram 3-step recipient payout flow (create recipient → verify OTP → pay out)',
-  snippet: `// The recommended payout flow for repeat beneficiaries (merchant-payouts-api.md §5).
+  snippet: `// The recommended payout flow for repeat beneficiaries.
 // The OTP step is out-of-band: PayRam emails a 6-digit code to the API-key
 // owner's email. The JS SDK has no recipient/OTP methods, so we call the
 // REST endpoints directly with the 'API-Key' header.
@@ -145,7 +145,7 @@ const { recipient } = await call<{ recipient: { id: number; status: string } }>(
   {
     name: 'Acme Supplier Ltd',
     email: 'supplier@acme.example',
-    blockchainCode: 'ethereum', // lowercase chain name: ethereum | bitcoin | tron | base | polygon
+    blockchainCode: 'ETH', // UPPERCASE chain code: ETH | BTC | TRX | BASE | POLYGON
     address: '0xAbCdEf0123456789AbCdEf0123456789AbCdEf01',
     projectIDs: [PROJECT_ID], // required, min 1
   },
@@ -183,5 +183,5 @@ console.log(\`Payout queued: \${withdrawal.id} (\${withdrawal.status}).\`);
       'Raw-HTTP 3-step payout: POST /recipients → POST /otp/validate → POST /project/{projectID}/admin/withdrawal.',
   },
   notes:
-    'Saved-recipient flow (merchant-payouts-api.md §5.1–5.3). Requires API-key permissions write_recipient, write_validate_otp, write_merchant_withdrawal. The OTP is emailed to the API-key owner (not returned by the API), so plan a human or inbox-reading step. Recipients are project-scoped via projectIDs; confirm status is "active" before paying out. Uses fetch (not the SDK) because payram.payouts exposes no recipient/OTP methods.',
+    'Saved-recipient flow. Requires API-key permissions write_recipient, write_validate_otp, write_merchant_withdrawal. The OTP is emailed to the API-key owner (not returned by the API), so plan a human or inbox-reading step. Recipients are project-scoped via projectIDs; confirm status is "active" before paying out. Uses fetch (not the SDK) because payram.payouts exposes no recipient/OTP methods.',
 });
