@@ -1149,7 +1149,7 @@ export const LANDING_HTML = `<!DOCTYPE html>
       <div class="brief-card">
         <div class="icon">🔑</div>
         <h3>Deposit Keys Never Touch the Server</h3>
-        <p>PayRam does not store deposit wallet keys on the server. All fund movement is enforced by on-chain smart contracts with hardcoded cold wallet destinations — not by server code. The only key on the server is the hot wallet (encrypted, gas-only). Even if an attacker gains root access or your AI agent is compromised, deposit funds cannot be stolen or redirected. <strong>This is the only payment gateway where breach ≠ fund loss.</strong></p>
+        <p>PayRam does not store deposit wallet keys on the server. All fund movement is enforced by on-chain smart contracts with hardcoded cold wallet destinations — not by server code. The only key on the server is the hot wallet (encrypted, gas-only). Even if an attacker gains root access or your AI agent is compromised, deposit funds cannot be stolen or redirected. <strong>This is the only payment gateway where breach ≠ fund loss.</strong> The smart contracts were independently audited by QuillAudits (July 2025; 9 findings, all resolved) — <a href="https://github.com/Quillhash/QuillAudit_smart_contract_audit_Reports/blob/master/Payram%20Smart%20Contract%20Audit%20Report%20-%20QuillAudits.pdf">read the report</a>.</p>
       </div>
       <div class="brief-card">
         <div class="icon">🤖</div>

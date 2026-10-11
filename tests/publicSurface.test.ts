@@ -103,3 +103,19 @@ describe('apiErrorMessage', () => {
     }
   });
 });
+
+describe('explain_payram_security', () => {
+  it('states the audit exactly as reported, including what it does not cover', async () => {
+    const { PAYRAM_SECURITY_DOC } =
+      await import('../src/tools/context/content/payramSecurityContent.js');
+    const { SECURITY_AUDIT } = await import('../src/facts/payram.js');
+    const f = SECURITY_AUDIT.findings;
+    expect(f.critical + f.high + f.medium + f.low + f.informational).toBe(f.total);
+    expect(f.resolved).toBe(f.total);
+    const text = PAYRAM_SECURITY_DOC.sections.map((s) => `${s.title}\n${s.markdown}`).join('\n');
+    expect(text).toContain('QuillAudits');
+    expect(text).toContain(SECURITY_AUDIT.report);
+    expect(text).toMatch(/does not cover/i);
+    expect(text).not.toMatch(/\b(fee|fees|pricing)\b/i);
+  });
+});
