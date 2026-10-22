@@ -91,7 +91,7 @@ circle-info
     
     5432
     
-    Used by the PostgreSQL Database for database connections.
+    Never published. The bundled PostgreSQL only accepts connections from inside the container; use `docker exec payram psql -U payram payram` or `docker exec payram pg_dump -U payram payram > backup.sql`.
     
 
 ### 
