@@ -1,5 +1,7 @@
 # PayRam MCP Server — Self-Hosted Crypto Payments for AI Agents
 
+[![Toolweather](https://toolweather.toolweather.workers.dev/badge/com.payram/mcp.svg)](https://toolweather.pages.dev/servers/com.payram--mcp/)
+
 > **Self-hosted crypto and stablecoin payments: no account lock, no fund freeze, customer data never shared. Your AI agent can plan, install and operate it over MCP.**
 > Hosted endpoint: **`https://mcp.payram.com/mcp`** · [Website](https://payram.com) · [Docs](https://docs.payram.com) · [Agentic](https://payram.com/agentic) · [OpenClaw](https://payram.com/openclaw)
 
