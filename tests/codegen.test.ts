@@ -168,6 +168,40 @@ describe('scaffold_payram_app output is valid code', () => {
     execFileSync('node', ['--check', mjs]);
   });
 
+  it('Next.js starter follows Next 16 conventions', async () => {
+    const files = new Map((await scaffold('node', 'nextjs')).map((f) => [f.path, f.contents]));
+    const pkg = JSON.parse(files.get('package.json')!);
+    expect(pkg.dependencies.next).toMatch(/^\^16\./);
+    expect(pkg.dependencies.react).toMatch(/^\^19\./);
+    expect(pkg.dependencies['react-dom']).toBe(pkg.dependencies.react);
+    expect(pkg.devDependencies.typescript).toBeDefined();
+    expect(files.has('app/layout.tsx')).toBe(true);
+    expect(files.get('.gitignore')).toMatch(/^\.env\*$/m);
+    // Next 15+ passes dynamic route params as a Promise; Next 16 removed sync access.
+    for (const route of [
+      'app/api/payments/[referenceId]/route.ts',
+      'app/api/payouts/[id]/route.ts',
+    ]) {
+      expect(files.get(route)).toContain('await params');
+      expect(files.get(route)).not.toMatch(/context\.params|params: \{/);
+    }
+    // next build imports every route, so none may build the SDK client (and need keys) at import.
+    for (const [file, contents] of files) {
+      if (file.endsWith('route.ts')) expect(contents).not.toContain('new Payram(');
+    }
+    expect(files.get('lib/payram.ts')).toContain('new Payram(');
+  });
+
+  it('Express starter is on Express 5', async () => {
+    const files = new Map((await scaffold('node', 'express')).map((f) => [f.path, f.contents]));
+    expect(JSON.parse(files.get('package.json')!).dependencies.express).toMatch(/^\^5\./);
+    const index = files.get('src/index.js')!;
+    // Express 5 leaves req.body undefined without a body, and reports listen errors to the callback.
+    expect(index).toContain('req.body ?? {}');
+    expect(index).toContain('Buffer.isBuffer(req.body)');
+    expect(index).toMatch(/app\.listen\(port, \(error\) =>/);
+  });
+
   it.skipIf(!hasTool('gofmt', ['-h']))('Gin main.go parses', async () => {
     const dir = path.join(workDir, 'gin');
     const files = await scaffold('go', 'gin');
