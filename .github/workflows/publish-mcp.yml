@@ -34,19 +34,6 @@ jobs:
       - name: Build
         run: yarn build
 
-      # This binary receives the DNS key, so it is pinned to one release and checked against the
-      # SHA-256 in that release's registry_1.8.1_checksums.txt before it runs:
-      # https://github.com/modelcontextprotocol/registry/releases/tag/v1.8.1
-      # To upgrade, change both values from the new release's checksums file.
-      - name: Install mcp-publisher
-        env:
-          MCP_PUBLISHER_VERSION: v1.8.1
-          MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc # linux_amd64
-        run: |
-          curl -fsSL -o mcp-publisher.tar.gz "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
-          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
-          tar xzf mcp-publisher.tar.gz mcp-publisher
-
       - name: Sync server.json version from tag
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
@@ -56,8 +43,24 @@ jobs:
         # Follow whatever schema server.json declares, so bumping it is a one-file change.
         run: curl -fL "$(jq -r '."$schema"' server.json)" -o /tmp/mcp-server-schema.json
 
+      # ajv comes from yarn.lock (devDependency), not whatever npx resolves that day.
       - name: Validate server.json against schema
-        run: npx ajv-cli@5 validate -s /tmp/mcp-server-schema.json -d server.json --strict=false
+        run: node scripts/validate-server-json.mjs /tmp/mcp-server-schema.json server.json
+
+      # This binary receives the DNS key, so it is pinned to one release and checked against the
+      # SHA-256 in that release's registry_1.8.1_checksums.txt before it runs:
+      # https://github.com/modelcontextprotocol/registry/releases/tag/v1.8.1
+      # To upgrade, change both values from the new release's checksums file.
+      # It is fetched and checked last, right before it is used, so nothing that
+      # runs earlier in the job can swap it.
+      - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.1
+          MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc # linux_amd64
+        run: |
+          curl -fsSL -o mcp-publisher.tar.gz "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
 
       # com.payram/* is proven by the MCPv1 TXT record on the payram.com apex,
       # so publishing needs that key rather than a GitHub identity.

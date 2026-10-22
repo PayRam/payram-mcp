@@ -11,12 +11,16 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 24 is what Vercel runs mcp.payram.com on; 26 is the next LTS.
+        node-version: [24, 26]
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 26
+          node-version: ${{ matrix.node-version }}
           cache: yarn
 
       - name: Install

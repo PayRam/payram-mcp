@@ -54,6 +54,7 @@
     "@types/node": "^26.6.5",
     "@types/supertest": "^7.2.1",
     "@types/turndown": "^5.0.6",
+    "ajv": "8.20.0",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
     "payram": "^1.0.1",
