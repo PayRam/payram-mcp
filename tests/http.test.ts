@@ -233,6 +233,22 @@ describe('one request cannot exhaust memory during validation', () => {
     expect(JSON.stringify(body).length).toBeLessThan(300);
   });
 
+  it.each(ERAS)(
+    '%s: a filter array under the caps still gets a short error (local mode)',
+    async (era) => {
+      // 900 network entries pass both element caps, so the schema answers. Without a maxItems,
+      // the SDK reported every element: an 8 KB request got a 173 KB reply.
+      const app = appFor({ PAYRAM_MCP_MODE: 'local' });
+      const { status, body } = await callTool(app, era, 'search_payments', {
+        network: Array(900).fill('x'.repeat(8)),
+      });
+      expect(status).toBe(200);
+      expect(body.result.isError).toBe(true);
+      expect(textOf(body.result)).toMatch(/^Input validation error/);
+      expect(JSON.stringify(body).length).toBeLessThan(2_000);
+    },
+  );
+
   it.each(ERAS)('%s: prompts/get arguments are bounded too', async (era) => {
     // The SDK has no element cap outside tools/call; the message cap covers the rest.
     const app = appFor({ PAYRAM_MCP_MODE: 'hosted' });
