@@ -17,12 +17,12 @@ jobs:
     environment: mcp-registry-publish
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
-          node-version: 'lts/*'
+          node-version: 26
           cache: 'yarn'
 
       - name: Install dependencies
@@ -34,9 +34,18 @@ jobs:
       - name: Build
         run: yarn build
 
+      # This binary receives the DNS key, so it is pinned to one release and checked against the
+      # SHA-256 in that release's registry_1.8.1_checksums.txt before it runs:
+      # https://github.com/modelcontextprotocol/registry/releases/tag/v1.8.1
+      # To upgrade, change both values from the new release's checksums file.
       - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.1
+          MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc # linux_amd64
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          curl -fsSL -o mcp-publisher.tar.gz "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
 
       - name: Sync server.json version from tag
         run: |
