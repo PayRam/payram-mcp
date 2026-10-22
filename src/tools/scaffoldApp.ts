@@ -60,12 +60,32 @@ const schemas = buildToolSchemas({
   output: scaffoldOutputSchema,
 });
 
-const ENV_EXAMPLE = `# Payram REST base URL (include protocol)
-PAYRAM_BASE_URL=http://your-payram-server.example  # TODO: replace
+const ENV_EXAMPLE = `# Payram server URL: the same origin as your Payram dashboard, with protocol
+PAYRAM_BASE_URL=https://your-payram-server.example  # TODO: replace
 
 # Payram API key (see Payram dashboard)
-PAYRAM_API_KEY=pk_test_replace_me                 # TODO: replace
+PAYRAM_API_KEY=pk_test_replace_me                  # TODO: replace
 `;
+
+// The payram SDK refuses http:// URLs unless told otherwise, and many self-hosted
+// servers start without HTTPS, so the Node starters make that an explicit choice.
+const NODE_ENV_EXAMPLE = `${ENV_EXAMPLE}
+# Only for a Payram server without HTTPS yet (an http:// PAYRAM_BASE_URL).
+# The API key then travels unencrypted: use it on a private network or for testing.
+# PAYRAM_ALLOW_INSECURE_HTTP=true
+`;
+
+const NODE_PAYRAM_CONFIG = `config: { allowInsecureHttp: process.env.PAYRAM_ALLOW_INSECURE_HTTP === 'true' },`;
+
+// The SDK's own refusal names its config option, not the .env line to change.
+const NODE_INSECURE_HTTP_CHECK = `if (
+  process.env.PAYRAM_BASE_URL?.toLowerCase().startsWith('http://') &&
+  process.env.PAYRAM_ALLOW_INSECURE_HTTP !== 'true'
+) {
+  throw new Error(
+    'PAYRAM_BASE_URL uses http://. Use the https:// address of your Payram server, or set PAYRAM_ALLOW_INSECURE_HTTP=true in .env if it has no HTTPS yet.',
+  );
+}`;
 
 const textContent = (text: string) => ({ type: 'text' as const, text });
 
@@ -112,6 +132,7 @@ dotenv.config();
 if (!process.env.PAYRAM_BASE_URL || !process.env.PAYRAM_API_KEY) {
   throw new Error('PAYRAM_BASE_URL and PAYRAM_API_KEY must be configured');
 }
+${NODE_INSECURE_HTTP_CHECK}
 
 const app = express();
 app.use(cors());
@@ -140,6 +161,7 @@ app.use(express.static('public'));
 const payram = new Payram({
   apiKey: process.env.PAYRAM_API_KEY,
   baseUrl: process.env.PAYRAM_BASE_URL,
+  ${NODE_PAYRAM_CONFIG}
 });
 
 app.post('/api/payments/create', async (req, res) => {
@@ -484,7 +506,7 @@ function scaffoldExpress(input: ScaffoldInput): ScaffoldResult {
     {
       path: '.env.example',
       description: 'Example Payram environment configuration.',
-      contents: ENV_EXAMPLE,
+      contents: NODE_ENV_EXAMPLE,
     },
     {
       path: 'package.json',
@@ -956,11 +978,17 @@ const nextPayramClient = `import { Payram } from 'payram';
 
 let client: Payram | undefined;
 
-export const getPayram = (): Payram =>
-  (client ??= new Payram({
-    apiKey: process.env.PAYRAM_API_KEY!,
-    baseUrl: process.env.PAYRAM_BASE_URL!,
-  }));
+export const getPayram = (): Payram => {
+  if (!client) {
+${NODE_INSECURE_HTTP_CHECK.replace(/^/gm, '    ')}
+    client = new Payram({
+      apiKey: process.env.PAYRAM_API_KEY!,
+      baseUrl: process.env.PAYRAM_BASE_URL!,
+      ${NODE_PAYRAM_CONFIG}
+    });
+  }
+  return client;
+};
 `;
 
 const nextApiRoute = (body: string) => `import { NextResponse } from 'next/server';
@@ -986,7 +1014,7 @@ function scaffoldNextJs(input: ScaffoldInput): ScaffoldResult {
     {
       path: '.env.example',
       description: 'Example Payram environment configuration.',
-      contents: ENV_EXAMPLE,
+      contents: NODE_ENV_EXAMPLE,
     },
     {
       path: 'package.json',

@@ -202,6 +202,23 @@ describe('scaffold_payram_app output is valid code', () => {
     expect(index).toMatch(/app\.listen\(port, \(error\) =>/);
   });
 
+  it('Node starters reach an http:// Payram server only when told to', async () => {
+    // The payram SDK refuses http:// unless config.allowInsecureHttp is set.
+    for (const [framework, clientFile] of [
+      ['express', 'src/index.js'],
+      ['nextjs', 'lib/payram.ts'],
+    ]) {
+      const files = new Map((await scaffold('node', framework)).map((f) => [f.path, f.contents]));
+      expect(files.get('.env.example')).toMatch(/^PAYRAM_BASE_URL=https:\/\//m);
+      expect(files.get('.env.example')).toMatch(/^# PAYRAM_ALLOW_INSECURE_HTTP=true$/m);
+      expect(files.get(clientFile)).toContain(
+        "allowInsecureHttp: process.env.PAYRAM_ALLOW_INSECURE_HTTP === 'true'",
+      );
+      // A refused http:// URL names the .env line to change, not the SDK option.
+      expect(files.get(clientFile)).toContain('set PAYRAM_ALLOW_INSECURE_HTTP=true in .env');
+    }
+  });
+
   it.skipIf(!hasTool('gofmt', ['-h']))('Gin main.go parses', async () => {
     const dir = path.join(workDir, 'gin');
     const files = await scaffold('go', 'gin');
