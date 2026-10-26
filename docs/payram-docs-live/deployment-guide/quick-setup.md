@@ -91,7 +91,7 @@ circle-info
     
     5432
     
-    Never published. The bundled PostgreSQL only accepts connections from inside the container; use `docker exec payram psql -U payram payram` or `docker exec payram pg_dump -U payram payram > backup.sql`.
+    Do not publish it. From PayRam 3.11.0 the bundled PostgreSQL accepts connections only from inside the container, and updating applies that to existing installs. Releases up to 3.10.0 accept password logins (default payram/payram123) from any address that can reach the container, and installs made before 28 May 2026 publish 5432 on every interface. On those, run `docker port payram`; if 5432 is listed, block it (`payram_runbook` task `firewall_ports`) and update PayRam. Open the database with `docker exec -it payram psql -U payram payram`; back it up with `docker exec payram pg_dump -U payram payram > backup.sql`.
     
 
 ### 
