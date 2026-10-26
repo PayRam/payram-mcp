@@ -32,6 +32,29 @@ const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const rpcError = (res: express.Response, status: number, code: number, message: string) =>
   res.status(status).json({ jsonrpc: '2.0', error: { code, message }, id: null });
 
+// One request must not be able to exhaust memory while the SDK validates it (GHSA-46jr-4wx8-v453).
+// The largest legitimate input is payram_troubleshoot's 20,000-character pasted output, so 256 KB
+// leaves room for JSON escaping. Tool arguments are also capped by maxToolInputElements
+// (createServer.ts); MAX_MESSAGE_ELEMENTS bounds what the SDK validates without a cap of its own,
+// such as prompts/get arguments, and sits above the tool cap so tool calls keep its readable error.
+const MAX_BODY_SIZE = '256kb';
+const MAX_MESSAGE_ELEMENTS = 2_000;
+
+/** Array elements + own object members in value, counting no further than max + 1. */
+const countElements = (value: unknown, max: number): number => {
+  let count = 0;
+  const stack = [value];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === null || typeof node !== 'object') continue;
+    for (const child of Array.isArray(node) ? node : Object.values(node)) {
+      if (++count > max) return count;
+      if (child !== null && typeof child === 'object') stack.push(child);
+    }
+  }
+  return count;
+};
+
 /** CORS for browser-based MCP clients. Only on hosted, which holds no credentials. */
 const hostedCors: express.RequestHandler = (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -120,8 +143,12 @@ export const configureApp = (app: express.Express): express.Express => {
     res.setHeader('Cache-Control', 'no-store');
     next();
   };
-  const jsonParser = express.json({ limit: '1mb' });
-  const parseErrors: express.ErrorRequestHandler = (_err, _req, res, _next) => {
+  const jsonParser = express.json({ limit: MAX_BODY_SIZE });
+  const parseErrors: express.ErrorRequestHandler = (err, _req, res, _next) => {
+    if ((err as { type?: string }).type === 'entity.too.large') {
+      rpcError(res, 413, -32600, `Request too large: the limit is ${MAX_BODY_SIZE}.`);
+      return;
+    }
     rpcError(res, 400, -32700, 'Parse error: the request body must be a single JSON-RPC message.');
   };
   const rejectBatch: express.RequestHandler = (req, res, next) => {
@@ -131,6 +158,18 @@ export const configureApp = (app: express.Express): express.Express => {
         400,
         -32600,
         'Batch requests are not supported. Send one JSON-RPC message per request.',
+      );
+      return;
+    }
+    next();
+  };
+  const rejectOversizedMessage: express.RequestHandler = (req, res, next) => {
+    if (countElements(req.body, MAX_MESSAGE_ELEMENTS) > MAX_MESSAGE_ELEMENTS) {
+      rpcError(
+        res,
+        400,
+        -32600,
+        `Request too large: one message may hold at most ${MAX_MESSAGE_ELEMENTS} array elements and object members.`,
       );
       return;
     }
@@ -153,6 +192,7 @@ export const configureApp = (app: express.Express): express.Express => {
       jsonParser,
       parseErrors,
       rejectBatch,
+      rejectOversizedMessage,
       serveMcp,
     );
   }

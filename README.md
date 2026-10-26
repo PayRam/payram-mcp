@@ -166,6 +166,7 @@ Most agents only need the hosted endpoint, `https://mcp.payram.com/mcp` (see [Co
    ```bash
    yarn install
    ```
+   This repo uses Yarn 1. Node 25 and later no longer ship Corepack, so on Node 26 install Yarn first with `npm install -g yarn`.
 2. **Configure environment** (only needed for the local-mode data tools)
    - Copy `.env.example` to `.env`.
    - Set `PAYRAM_BASE_URL` to your PayRam URL, the same origin as the dashboard (e.g. `https://pay.example.com`).
@@ -359,6 +360,6 @@ Project is TypeScript-first (ESM). Prettier config lives in `.prettierrc.json`; 
 - **A data tool says credentials are unavailable:** the hosted server never holds merchant credentials. Use the matching `payram_ops_playbook` task, or run the MCP in [local mode](#local-mode).
 - **Payment links show `http://localhost`:** the human must save Settings → Site URL from the public domain (`payram_runbook` task `set_site_url`).
 - **Docs tool says a file is missing:** Verify your local `docs/payram-docs-live/` tree contains the requested markdown (`get_payram_doc_by_id` rejects paths with `..`).
-- **Server won’t start:** Ensure Node 20+ and run `yarn install`. In local mode with a non-loopback `HOST` and `PAYRAM_*` credentials set, the server refuses to start until `MCP_SERVER_TOKEN` is set (see [Local mode](#local-mode)).
+- **Server won’t start:** Ensure Node 22.12+ and run `yarn install`. In local mode with a non-loopback `HOST` and `PAYRAM_*` credentials set, the server refuses to start until `MCP_SERVER_TOKEN` is set (see [Local mode](#local-mode)).
 
 For anything else, inspect the structured logs emitted from `src/utils/logger.ts` (set `LOG_LEVEL=debug`) and open an issue/PR with reproduction details.

@@ -33,22 +33,28 @@ const schemas = buildToolSchemas({
             'UNDEFINED',
           ]),
         )
+        .max(8)
         .optional()
         .describe('Filter by payment status (FILLED = completed).'),
+      // Bounded so a small request cannot produce a huge validation error.
       network: z
-        .array(z.string())
+        .array(z.string().max(32))
+        .max(20)
         .optional()
         .describe('Filter by blockchain network (e.g. BTC, ETH, TRX, BASE, POLYGON).'),
       currency: z
-        .array(z.string())
+        .array(z.string().max(32))
+        .max(20)
         .optional()
         .describe('Filter by currency code (e.g. USDC, USDT, BTC, ETH, TRX, CBBTC).'),
       webhookStatus: z
         .array(z.enum(['received', 'pending', 'failed', 'waiting_for_approval', 'discarded']))
+        .max(5)
         .optional()
         .describe('Filter by webhook delivery status.'),
       createdBy: z
         .array(z.enum(['user', 'system']))
+        .max(2)
         .optional()
         .describe('Filter by creator type.'),
       dateFrom: z
