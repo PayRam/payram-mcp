@@ -16,8 +16,12 @@ jobs:
     # when it names the environment.
     environment: mcp-registry-publish
     steps:
+      # Nothing in this job pushes or fetches, so the token is not left in .git/config for the
+      # dependency install scripts and tests that run before the publisher.
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
