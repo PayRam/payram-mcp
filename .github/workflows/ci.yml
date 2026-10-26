@@ -10,13 +10,29 @@ permissions:
 
 jobs:
   check:
+    # Named by Node version only, so the extra matrix keys below stay out of the check name.
+    name: check (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # 24 is what Vercel runs mcp.payram.com on; 26 is the next LTS.
-        node-version: [24, 26]
+        include:
+          # The oldest Node that package.json "engines" allows. ESLint 10, a dev tool, needs
+          # 22.13+, so this leg installs without yarn's engine check and skips lint; it still
+          # builds and runs every test on the oldest Node the server claims to support.
+          - node-version: '22.12'
+            install-flags: --ignore-engines
+            lint: false
+          # What Vercel runs mcp.payram.com on.
+          - node-version: '24'
+            lint: true
+          # The next LTS.
+          - node-version: '26'
+            lint: true
     steps:
+      # Nothing in this job pushes or fetches, so the token is not left in .git/config.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -24,7 +40,7 @@ jobs:
           cache: yarn
 
       - name: Install
-        run: yarn install --frozen-lockfile
+        run: yarn install --frozen-lockfile ${{ matrix.install-flags }}
 
       - name: Generated files are up to date
         run: |
@@ -36,6 +52,7 @@ jobs:
         run: npx prettier --check src tests scripts/generate-build-info.mjs
 
       - name: Lint
+        if: matrix.lint
         run: yarn lint
 
       # tsc in the build is the typecheck.
@@ -45,5 +62,22 @@ jobs:
       - name: Test
         run: yarn test
 
+      # yarn audit's exit code is a bitmask of the severities it found (1 info, 2 low,
+      # 4 moderate, 8 high, 16 critical); --level only filters what it prints. It also exits 1
+      # when the audit itself fails, so a bare 1 fails the job too: a check that could not run
+      # must not pass.
       - name: Production dependency audit
-        run: yarn audit --groups dependencies --level high || echo "::warning::yarn audit reported high-severity advisories"
+        run: |
+          status=0
+          yarn audit --groups dependencies || status=$?
+          if [ $((status & 24)) -ne 0 ]; then
+            echo "::error::yarn audit found high or critical advisories in production dependencies"
+            exit 1
+          fi
+          if [ "$status" -eq 1 ]; then
+            echo "::error::yarn audit did not complete, or found only info-level advisories; see its output above"
+            exit 1
+          fi
+          if [ $((status & 6)) -ne 0 ]; then
+            echo "::warning::yarn audit found moderate or low advisories in production dependencies"
+          fi

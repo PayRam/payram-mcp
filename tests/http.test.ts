@@ -1,4 +1,9 @@
 import express from 'express';
+import { once } from 'node:events';
+import http from 'node:http';
+import { createRequire } from 'node:module';
+import type { AddressInfo } from 'node:net';
+import { gzipSync } from 'node:zlib';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { configureApp } from '../src/configureApp.js';
@@ -264,5 +269,69 @@ describe('one request cannot exhaust memory during validation', () => {
     });
     expect(ok.status).toBe(200);
     expect(JSON.stringify(ok.body.result.messages)).toContain('pay.example.com');
+  });
+});
+
+describe('hostile request bodies cannot take the server down', () => {
+  // GHSA-27r3-jxmh-p828: body-parser before 2.4.0 left its decoder piped to the request after a
+  // successful read. A gzip body padded with one zero byte finishes the read early; a second gzip
+  // member in a later chunk then made the decoder push after its end, an error nothing listened
+  // for, which ended the process. Hosted POST /mcp is public and parses compressed JSON.
+  it('a gzip body followed by another gzip member gets an answer, and the process survives', async () => {
+    const uncaught: unknown[] = [];
+    const recordUncaught = (err: unknown) => uncaught.push(err);
+    process.on('uncaughtException', recordUncaught);
+    const server = appFor({ PAYRAM_MCP_MODE: 'hosted' }).listen(0, '127.0.0.1');
+    try {
+      await once(server, 'listening');
+      const { port } = server.address() as AddressInfo;
+      const bodyRead = new Promise<void>((resolve) =>
+        server.once('request', (req: http.IncomingMessage) => req.once('end', resolve)),
+      );
+      const req = http.request({
+        host: '127.0.0.1',
+        port,
+        method: 'POST',
+        path: '/mcp',
+        headers: {
+          Accept: ACCEPT,
+          'Content-Type': 'application/json',
+          'Content-Encoding': 'gzip',
+          'Transfer-Encoding': 'chunked',
+        },
+      });
+      req.write(Buffer.concat([gzipSync(JSON.stringify(init)), Buffer.from([0])]));
+      const [res] = (await once(req, 'response')) as [http.IncomingMessage];
+      res.resume();
+      await once(res, 'end');
+      // The parser has finished; now the trailing member arrives.
+      req.end(gzipSync('a second gzip member'));
+      await bodyRead;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(res.statusCode).toBe(200);
+      expect(uncaught).toEqual([]);
+    } finally {
+      process.off('uncaughtException', recordUncaught);
+      server.closeAllConnections();
+      server.close();
+    }
+  });
+
+  // GHSA-mrhx-c7xc-m3w5: zod through 4.6.5 validated every element of an over-long array before
+  // checking its length, so one request could allocate an issue per element. The MCP SDK checks
+  // every JSON-RPC message with the zod it resolves itself, which need not be the copy the tool
+  // schemas import (it was 4.6.5, next to the app's 4.6.7).
+  it('the zod the MCP SDK validates with checks an array’s length before its elements', () => {
+    const serverEntry = createRequire(import.meta.url).resolve('@modelcontextprotocol/server');
+    const coreEntry = createRequire(serverEntry).resolve('@modelcontextprotocol/core');
+    for (const entry of [serverEntry, coreEntry]) {
+      const { z } = createRequire(entry)('zod') as typeof import('zod');
+      const result = z.array(z.string()).max(10).safeParse(Array(100_000).fill(0));
+      expect(
+        result.error?.issues.map((issue) => issue.code),
+        entry,
+      ).toEqual(['too_big']);
+    }
   });
 });
