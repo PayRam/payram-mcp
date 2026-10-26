@@ -45,5 +45,22 @@ jobs:
       - name: Test
         run: yarn test
 
+      # yarn audit's exit code is a bitmask of the severities it found (1 info, 2 low,
+      # 4 moderate, 8 high, 16 critical); --level only filters what it prints. It also exits 1
+      # when the audit itself fails, so a bare 1 fails the job too: a check that could not run
+      # must not pass.
       - name: Production dependency audit
-        run: yarn audit --groups dependencies --level high || echo "::warning::yarn audit reported high-severity advisories"
+        run: |
+          status=0
+          yarn audit --groups dependencies || status=$?
+          if [ $((status & 24)) -ne 0 ]; then
+            echo "::error::yarn audit found high or critical advisories in production dependencies"
+            exit 1
+          fi
+          if [ "$status" -eq 1 ]; then
+            echo "::error::yarn audit did not complete, or found only info-level advisories; see its output above"
+            exit 1
+          fi
+          if [ $((status & 6)) -ne 0 ]; then
+            echo "::warning::yarn audit found moderate or low advisories in production dependencies"
+          fi
