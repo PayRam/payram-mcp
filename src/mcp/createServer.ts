@@ -42,6 +42,11 @@ export const createPayramMcpServer = (): McpServer => {
     },
     {
       instructions: buildInstructions(),
+      // Caps array elements + object keys in one tools/call's arguments (GHSA-46jr-4wx8-v453:
+      // without it one request can exhaust memory during validation; the SDK leaves it off unless
+      // set). The largest legitimate input, search_payments' filter lists, is under 100 elements.
+      // Both protocol eras build their per-request server here (configureApp.ts).
+      maxToolInputElements: 1_000,
       // The catalog is static per deployment, so 2026-era clients may cache
       // list results for a while (public: nothing tenant-specific in them).
       cacheHints: {

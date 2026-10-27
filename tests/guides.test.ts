@@ -1,3 +1,4 @@
+import { readdir } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { buildSetupPlan, renderSetupPlan } from '../src/tools/guides/setupPlan.js';
 import {
@@ -11,6 +12,8 @@ import { RUNBOOK_TASKS, getRunbook, renderRunbook } from '../src/tools/guides/ru
 import { buildInstructions } from '../src/mcp/createServer.js';
 import { PAYRAM_ENV_TEMPLATE } from '../src/tools/setup/content/envTemplateContent.js';
 import { PAYRAM_SETUP_CHECKLIST } from '../src/tools/setup/content/setupChecklistContent.js';
+import { getDocsRoot, loadMarkdown } from '../src/utils/markdownLoader.js';
+import { withClient } from './helpers.js';
 
 const PLAN_VARIANTS = [
   {},
@@ -65,6 +68,43 @@ describe('truth lint over served guidance', () => {
       expect(line, line).toMatch(
         /not|never|legacy|no :8080|block|avoid|drop|DROP|may still|bypass|8080 8443/i,
       );
+    }
+  });
+});
+
+describe('truth lint over the vendored docs', () => {
+  const servedDoc = (id: string) =>
+    withClient('modern', async (client) => {
+      const result = await client.callTool({ name: 'get_payram_doc_by_id', arguments: { id } });
+      return (result.structuredContent as { markdown: string }).markdown;
+    });
+
+  // Only core 3.11.0 and later keep the bundled PostgreSQL local (and fix older data directories
+  // on start). Every earlier release accepts password logins from any address that can reach the
+  // container, and installs made before 28 May 2026 still publish 5432.
+  it.each(['deployment-guide/quick-setup', 'deployment-guide/advanced-setup'])(
+    '%s says which releases keep the database local, and how to check an older one',
+    async (id) => {
+      const md = await servedDoc(id);
+      expect(md).not.toMatch(/never published/i);
+      const entry = md.split('\n').find((line) => /bundled PostgreSQL/.test(line)) ?? '';
+      expect(entry).toMatch(/From PayRam 3\.11\.0 .*only from inside the container/);
+      expect(entry).toMatch(/up to 3\.10\.0 accept password logins/);
+      expect(entry).toContain('docker port payram');
+      expect(entry).toContain('`firewall_ports`');
+      expect(RUNBOOK_TASKS).toContain('firewall_ports');
+    },
+  );
+
+  it('opens psql through docker exec with a terminal, unless it reads from a file', async () => {
+    const files = (await readdir(getDocsRoot(), { recursive: true })).filter((f) =>
+      f.endsWith('.md'),
+    );
+    const texts = [allGuideText(), ...(await Promise.all(files.map(loadMarkdown)))];
+    const calls = texts.flatMap((t) => t.match(/docker exec [^`\n]*\bpsql\b[^`\n]*/g) ?? []);
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls.filter((c) => !c.includes('<'))) {
+      expect(call, call).toMatch(/^docker exec -it /);
     }
   });
 });

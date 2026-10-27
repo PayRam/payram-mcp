@@ -60,12 +60,32 @@ const schemas = buildToolSchemas({
   output: scaffoldOutputSchema,
 });
 
-const ENV_EXAMPLE = `# Payram REST base URL (include protocol)
-PAYRAM_BASE_URL=http://your-payram-server.example  # TODO: replace
+const ENV_EXAMPLE = `# Payram server URL: the same origin as your Payram dashboard, with protocol
+PAYRAM_BASE_URL=https://your-payram-server.example  # TODO: replace
 
 # Payram API key (see Payram dashboard)
-PAYRAM_API_KEY=pk_test_replace_me                 # TODO: replace
+PAYRAM_API_KEY=pk_test_replace_me                  # TODO: replace
 `;
+
+// The payram SDK refuses http:// URLs unless told otherwise, and many self-hosted
+// servers start without HTTPS, so the Node starters make that an explicit choice.
+const NODE_ENV_EXAMPLE = `${ENV_EXAMPLE}
+# Only for a Payram server without HTTPS yet (an http:// PAYRAM_BASE_URL).
+# The API key then travels unencrypted: use it on a private network or for testing.
+# PAYRAM_ALLOW_INSECURE_HTTP=true
+`;
+
+const NODE_PAYRAM_CONFIG = `config: { allowInsecureHttp: process.env.PAYRAM_ALLOW_INSECURE_HTTP === 'true' },`;
+
+// The SDK's own refusal names its config option, not the .env line to change.
+const NODE_INSECURE_HTTP_CHECK = `if (
+  process.env.PAYRAM_BASE_URL?.toLowerCase().startsWith('http://') &&
+  process.env.PAYRAM_ALLOW_INSECURE_HTTP !== 'true'
+) {
+  throw new Error(
+    'PAYRAM_BASE_URL uses http://. Use the https:// address of your Payram server, or set PAYRAM_ALLOW_INSECURE_HTTP=true in .env if it has no HTTPS yet.',
+  );
+}`;
 
 const textContent = (text: string) => ({ type: 'text' as const, text });
 
@@ -112,6 +132,7 @@ dotenv.config();
 if (!process.env.PAYRAM_BASE_URL || !process.env.PAYRAM_API_KEY) {
   throw new Error('PAYRAM_BASE_URL and PAYRAM_API_KEY must be configured');
 }
+${NODE_INSECURE_HTTP_CHECK}
 
 const app = express();
 app.use(cors());
@@ -120,13 +141,15 @@ ${
     ? `
 // Webhooks are signed over the raw body, so this route comes before express.json().
 app.post('/api/payram/webhook', express.raw({ type: '*/*' }), (req, res) => {
-  const expected = createHmac('sha256', process.env.PAYRAM_API_KEY).update(req.body).digest();
+  // Express 5 leaves req.body undefined when the request has no body.
+  const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  const expected = createHmac('sha256', process.env.PAYRAM_API_KEY).update(raw).digest();
   const header = req.get('X-Payram-Signature') || '';
   const received = header.startsWith('sha256=') ? Buffer.from(header.slice(7), 'hex') : Buffer.alloc(0);
   if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
     return res.status(401).json({ error: 'invalid-signature' });
   }
-  console.log('Payram webhook event:', req.get('X-Webhook-Test') === 'true' ? 'test ping' : req.body.toString('utf8'));
+  console.log('Payram webhook event:', req.get('X-Webhook-Test') === 'true' ? 'test ping' : raw.toString('utf8'));
   res.json({ message: 'Webhook received successfully' });
 });
 `
@@ -138,11 +161,12 @@ app.use(express.static('public'));
 const payram = new Payram({
   apiKey: process.env.PAYRAM_API_KEY,
   baseUrl: process.env.PAYRAM_BASE_URL,
+  ${NODE_PAYRAM_CONFIG}
 });
 
 app.post('/api/payments/create', async (req, res) => {
   try {
-    const { amount, currency = 'USD', referenceId } = req.body;
+    const { amount, referenceId } = req.body ?? {};
     const checkout = await payram.payments.initiatePayment({
       amountInUSD: Number(amount ?? 1),
       customerEmail: 'customer@example.com',
@@ -165,7 +189,7 @@ app.get('/api/payments/:referenceId', async (req, res) => {
 
 app.post('/api/payouts/create', async (req, res) => {
   try {
-    const { amount, currencyCode = 'USDT', blockchainCode = 'ETH', customerID, customerId, email = 'merchant@example.com', toAddress } = req.body;
+    const { amount, currencyCode = 'USDT', blockchainCode = 'ETH', customerID, customerId, email = 'merchant@example.com', toAddress } = req.body ?? {};
     const normalizedCustomerID = customerID ?? customerId ?? 'demo-customer-id';
     const payout = await payram.payouts.createPayout({
       customerID: normalizedCustomerID,
@@ -191,7 +215,8 @@ app.get('/api/payouts/:id', async (req, res) => {
 });
 
 const port = process.env.PORT ?? 3000;
-app.listen(port, () => {
+app.listen(port, (error) => {
+  if (error) throw error; // Express 5 reports listen errors (e.g. port in use) here
   console.log('Payram Express starter listening on http://localhost:' + port);
 });
 `;
@@ -481,7 +506,7 @@ function scaffoldExpress(input: ScaffoldInput): ScaffoldResult {
     {
       path: '.env.example',
       description: 'Example Payram environment configuration.',
-      contents: ENV_EXAMPLE,
+      contents: NODE_ENV_EXAMPLE,
     },
     {
       path: 'package.json',
@@ -496,10 +521,10 @@ function scaffoldExpress(input: ScaffoldInput): ScaffoldResult {
             start: 'NODE_ENV=production node src/index.js',
           },
           dependencies: {
-            cors: '^2.8.5',
-            dotenv: '^16.4.5',
-            express: '^4.19.2',
-            payram: '^1.0.0',
+            cors: '^2.8.6',
+            dotenv: '^18.0.8',
+            express: '^5.3.0',
+            payram: '^1.0.1',
           },
         },
         null,
@@ -888,16 +913,90 @@ export default function HomePage() {
 }
 `;
 
-const nextApiRoute = (body: string) => `import { NextResponse } from 'next/server';
-import { Payram } from 'payram';
+const nextLayoutTsx = `import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 
-const payram = new Payram({
-  apiKey: process.env.PAYRAM_API_KEY!,
-  baseUrl: process.env.PAYRAM_BASE_URL!,
-});
+export const metadata: Metadata = {
+  title: 'Payram Starter Console',
+  description: 'Payram payments and payouts starter',
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body style={{ margin: 0, background: '#f4f6fb' }}>{children}</body>
+    </html>
+  );
+}
+`;
+
+const nextTsconfig = `${JSON.stringify(
+  {
+    compilerOptions: {
+      target: 'ES2017',
+      lib: ['dom', 'dom.iterable', 'esnext'],
+      allowJs: true,
+      skipLibCheck: true,
+      strict: true,
+      noEmit: true,
+      esModuleInterop: true,
+      module: 'esnext',
+      moduleResolution: 'bundler',
+      resolveJsonModule: true,
+      isolatedModules: true,
+      jsx: 'react-jsx',
+      incremental: true,
+      plugins: [{ name: 'next' }],
+      paths: { '@/*': ['./*'] },
+    },
+    include: [
+      'next-env.d.ts',
+      '**/*.ts',
+      '**/*.tsx',
+      '.next/types/**/*.ts',
+      '.next/dev/types/**/*.ts',
+      '**/*.mts',
+    ],
+    exclude: ['node_modules'],
+  },
+  null,
+  2,
+)}
+`;
+
+const nextGitignore = `node_modules/
+.next/
+out/
+.env*
+!.env.example
+*.tsbuildinfo
+next-env.d.ts
+`;
+
+// Built on first use, not at import: next build loads every route and must not need PayRam credentials.
+const nextPayramClient = `import { Payram } from 'payram';
+
+let client: Payram | undefined;
+
+export const getPayram = (): Payram => {
+  if (!client) {
+${NODE_INSECURE_HTTP_CHECK.replace(/^/gm, '    ')}
+    client = new Payram({
+      apiKey: process.env.PAYRAM_API_KEY!,
+      baseUrl: process.env.PAYRAM_BASE_URL!,
+      ${NODE_PAYRAM_CONFIG}
+    });
+  }
+  return client;
+};
+`;
+
+const nextApiRoute = (body: string) => `import { NextResponse } from 'next/server';
+import { getPayram } from '@/lib/payram';
 
 export async function POST(request: Request) {
   try {
+    const payram = getPayram();
     const payload = await request.json();
 ${body}
   } catch (error) {
@@ -915,7 +1014,7 @@ function scaffoldNextJs(input: ScaffoldInput): ScaffoldResult {
     {
       path: '.env.example',
       description: 'Example Payram environment configuration.',
-      contents: ENV_EXAMPLE,
+      contents: NODE_ENV_EXAMPLE,
     },
     {
       path: 'package.json',
@@ -929,11 +1028,18 @@ function scaffoldNextJs(input: ScaffoldInput): ScaffoldResult {
             build: 'next build',
             start: 'next start',
           },
+          engines: { node: '>=20.9.0' },
           dependencies: {
-            next: '14.1.0',
-            react: '18.2.0',
-            'react-dom': '18.2.0',
-            payram: '^1.0.0',
+            next: '^16.4.2',
+            react: '^19.3.1',
+            'react-dom': '^19.3.1',
+            payram: '^1.0.1',
+          },
+          devDependencies: {
+            '@types/node': '^24.19.2',
+            '@types/react': '^19.3.0',
+            '@types/react-dom': '^19.3.0',
+            typescript: '^5.9.3',
           },
         },
         null,
@@ -941,11 +1047,26 @@ function scaffoldNextJs(input: ScaffoldInput): ScaffoldResult {
       ),
     },
     {
+      path: 'tsconfig.json',
+      description: 'TypeScript configuration (the create-next-app defaults).',
+      contents: nextTsconfig,
+    },
+    {
+      path: '.gitignore',
+      description: 'Keeps .env (your API key), dependencies and build output out of git.',
+      contents: nextGitignore,
+    },
+    {
+      path: 'app/layout.tsx',
+      description: 'Root layout the App Router requires.',
+      contents: nextLayoutTsx,
+    },
+    {
       path: 'README.md',
       description: 'Setup instructions for the Next.js starter.',
       contents: `# ${appName}
 
-Full-stack Next.js example for Payram payments & payouts with a minimal UI.
+Full-stack Next.js 16 example for Payram payments & payouts with a minimal UI. Needs Node.js 20.9 or later.
 
 ## Getting Started
 
@@ -968,6 +1089,11 @@ ${
     },
     { path: 'app/page.tsx', description: 'Next.js frontend page.', contents: nextPageTsx },
     {
+      path: 'lib/payram.ts',
+      description: 'Shared Payram SDK client, created on first request.',
+      contents: nextPayramClient,
+    },
+    {
       path: 'app/api/payments/create/route.ts',
       description: 'Payment creation route using Payram SDK.',
       contents: nextApiRoute(
@@ -978,16 +1104,15 @@ ${
       path: 'app/api/payments/[referenceId]/route.ts',
       description: 'Payment status route using Payram SDK.',
       contents: `import { NextResponse } from 'next/server';
-import { Payram } from 'payram';
+import { getPayram } from '@/lib/payram';
 
-const payram = new Payram({
-  apiKey: process.env.PAYRAM_API_KEY!,
-  baseUrl: process.env.PAYRAM_BASE_URL!,
-});
-
-export async function GET(_request: Request, context: { params: { referenceId: string } }) {
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ referenceId: string }> },
+) {
   try {
-    const payment = await payram.payments.getPaymentRequest(context.params.referenceId);
+    const { referenceId } = await params;
+    const payment = await getPayram().payments.getPaymentRequest(referenceId);
     return NextResponse.json(payment);
   } catch (error) {
     return NextResponse.json(
@@ -1009,16 +1134,12 @@ export async function GET(_request: Request, context: { params: { referenceId: s
       path: 'app/api/payouts/[id]/route.ts',
       description: 'Payout status route.',
       contents: `import { NextResponse } from 'next/server';
-import { Payram } from 'payram';
+import { getPayram } from '@/lib/payram';
 
-const payram = new Payram({
-  apiKey: process.env.PAYRAM_API_KEY!,
-  baseUrl: process.env.PAYRAM_BASE_URL!,
-});
-
-export async function GET(_request: Request, context: { params: { id: string } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const payout = await payram.payouts.getPayoutById(Number(context.params.id));
+    const { id } = await params;
+    const payout = await getPayram().payouts.getPayoutById(Number(id));
     return NextResponse.json(payout);
   } catch (error) {
     return NextResponse.json(
@@ -1362,13 +1483,25 @@ function scaffoldGin(input: ScaffoldInput): ScaffoldResult {
       description: 'Go module definition.',
       contents: `module github.com/payram/${sanitizeGoModuleName(appName)}
 
-    go 1.21
+go 1.26.0
 
-    require (
-      github.com/gin-gonic/gin v1.10.0
-      github.com/joho/godotenv v1.5.1
-    )
-    `,
+toolchain go1.26.10
+
+require (
+	github.com/gin-gonic/gin v1.12.0
+	github.com/joho/godotenv v1.5.1
+)
+
+// Newer than gin v1.12.0 asks for: these carry security fixes (HTTP/2 and HTTP/3 servers,
+// x/crypto). go mod tidy keeps them.
+require (
+	github.com/quic-go/quic-go v0.64.1 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
+)
+`,
     },
     {
       path: 'README.md',
@@ -1616,12 +1749,18 @@ ${
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.2.5</version>
+    <version>4.1.1</version>
   </parent>
+  <properties>
+    <!-- Tomcat and Jackson security fixes newer than Spring Boot 4.1.1 manages.
+         Delete these two lines when moving to a later Spring Boot release. -->
+    <tomcat.version>11.0.27</tomcat.version>
+    <jackson-bom.version>3.1.8</jackson-bom.version>
+  </properties>
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>

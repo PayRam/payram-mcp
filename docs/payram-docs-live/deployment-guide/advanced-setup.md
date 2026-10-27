@@ -111,7 +111,7 @@ circle-info
     
     5432
     
-    Used by the PostgreSQL Database for database connections.
+    Do not publish it. From PayRam 3.11.0 the bundled PostgreSQL accepts connections only from inside the container, and updating applies that to existing installs. Releases up to 3.10.0 accept password logins with the shared default password from any address that can reach the container, and installs made before 28 May 2026 publish 5432 on every interface. On those, run `docker port payram`; if 5432 is listed, block it (`payram_runbook` task `firewall_ports`) and update PayRam. Open the database with `docker exec -it payram psql -U payram payram`; back it up with `docker exec payram pg_dump -U payram payram > backup.sql`.
     
 
 * * *
@@ -140,8 +140,6 @@ This command does the following:
     -   8080 → legacy internal API access (current installs serve the API on port 80)
         
     -   80 → HTTP access
-        
-    -   5432 → Postgres database access
         
     
 -   **Sets environment variables**:
@@ -283,8 +281,6 @@ Before starting PayRam for the first time, make sure you **note down and store a
     -   80 → standard HTTP
         
     -   443 → HTTPS (requires valid SSL certs)
-        
-    -   5432 → Postgres access
         
     
 
