@@ -44,7 +44,7 @@
       "description": "Authenticate with a PayRam instance to access merchant dashboard APIs. Covers login with email/password, JWT Bearer token usage, automatic token refresh, and extracting tokens from a browser session. Use when connecting to PayRam APIs, troubleshooting authentication, or building integrations that need merchant-level access to payment data, analytics, and sweep management.",
       "url": "https://raw.githubusercontent.com/PayRam/payram-mcp/main/skills/payram-auth/SKILL.md",
       "mcpUrl": "https://mcp.payram.com/skills/payram-auth.md",
-      "sha256": "af702747ee36795539593265adbc5e29f67252711c6404e03f37bc358d35e7e2"
+      "sha256": "2d8acbda629365948ee57c81798ea2db38aa556cb42939be8043036802007162"
     },
     {
       "name": "payram-bitcoin-payments",

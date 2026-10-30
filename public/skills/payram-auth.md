@@ -120,18 +120,27 @@ again.
 
 ### Changes that need the code
 
-For a member with two-factor sign-in on, a few changes need their current app
-code as well as the session: changing payout limits
+For a member with two-factor sign-in on, every change to who holds power on
+the server or where its money goes needs their current app code as well as the
+session: adding or changing members and roles, projects and their members,
+wallets and where funds land, API keys, the mail server, resetting another
+member's two-factor sign-in, and payout limits
 (`PUT` or `DELETE /api/v1/project/<id>/payout-config`, or a payout-limit
-setting), creating a project API key, and turning a turned-off key back on.
+setting). Reads never need it; payments and payouts made with a project API
+key never do.
+
 Send the code as the `Two-Factor-Code` header. Without it the answer is 403
-`TWO_FACTOR_CODE_REQUIRED` and nothing changes. A code works once, so ask the
-member for a fresh one for each change.
+`TWO_FACTOR_CODE_REQUIRED` and nothing changes. A confirmed code's response
+carries a `Two-Factor-Grant` header: send it back as `Two-Factor-Grant` with
+the next such changes, and they go through without a code for 10 minutes, with
+the same access token only. When it runs out, or after a token refresh, the
+answer is `TWO_FACTOR_CODE_REQUIRED` again: ask the member for a fresh code.
 
 ```bash
-curl -s -X PUT "${BASE_URL}/api/v1/project/1/payout-config" \
+curl -s -D headers.txt -X PUT "${BASE_URL}/api/v1/project/1/payout-config" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Two-Factor-Code: 123456" \
   -H "Content-Type: application/json" -d '{"dailyLimit":"5000"}'
+GRANT=$(grep -i '^two-factor-grant:' headers.txt | cut -d' ' -f2 | tr -d '\r')
 ```
 
 ---
