@@ -235,8 +235,11 @@ export const safeFetch = async (
   options: SafeFetchOptions = {},
 ): Promise<SafeFetchResult> => {
   const opts: ResolvedOptions = {
-    ...DEFAULTS,
     ...options,
+    // `??`, not spread: an explicit undefined (callers passing "no budget") keeps the default.
+    timeoutMs: options.timeoutMs ?? DEFAULTS.timeoutMs,
+    maxBytes: options.maxBytes ?? DEFAULTS.maxBytes,
+    maxRedirects: options.maxRedirects ?? DEFAULTS.maxRedirects,
     allowPrivate: options.allowPrivate ?? !isHosted(),
   };
   let url = typeof target === 'string' ? new URL(target) : new URL(target.href);
