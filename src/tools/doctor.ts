@@ -8,7 +8,7 @@ import {
   getOptionalPayramApiKey,
   getOptionalPayramBaseUrl,
 } from '../config/env.js';
-import { isLoopbackHost } from '../config/runtime.js';
+import { isHosted, isLoopbackHost } from '../config/runtime.js';
 import { getSiteUrl, getWallets } from '../api/payramApi.js';
 import {
   excerpt,
@@ -438,13 +438,21 @@ export const runDoctor = async (args: Input, opts: DoctorOptions = {}): Promise<
       },
     ]);
   }
+  // Rounds run one after another (health, then ports or probes), so on the hosted server each
+  // gets a short budget: together they stay under its 8 s response deadline (configureApp.ts).
+  const budget = isHosted()
+    ? { healthMs: 4_000, portMs: 1_500, probeMs: 3_000 }
+    : { healthMs: undefined, portMs: undefined, probeMs: undefined };
+
   // Independent of the server: start it now, await it after health.
   const latestP = opts.connectivityOnly ? null : getLatestCoreVersion();
 
   // ── reachability + health (public) ─────────────────────────────────
   // A bare host is tried over https and http together; prefer a PayRam answer, then any answer.
   const attempts = await Promise.allSettled(
-    candidates.map((c) => safeFetch(`${c.href.replace(/\/+$/, '')}/api/v1/health`)),
+    candidates.map((c) =>
+      safeFetch(`${c.href.replace(/\/+$/, '')}/api/v1/health`, { timeoutMs: budget.healthMs }),
+    ),
   );
   const parseHealth = (body: string): HealthBody | null => {
     try {
@@ -483,7 +491,9 @@ export const runDoctor = async (args: Input, opts: DoctorOptions = {}): Promise<
     const probed = new Map<number, PortState>();
     if (kind !== 'private' && kind !== 'dns' && kind !== 'tls' && kind !== 'wrong-protocol') {
       const ports = [...new Set([80, 443, 8080, 8443, ...(base.port ? [Number(base.port)] : [])])];
-      const states = await Promise.all(ports.map((p) => probePort(base.hostname, p)));
+      const states = await Promise.all(
+        ports.map((p) => probePort(base.hostname, p, { timeoutMs: budget.portMs })),
+      );
       ports.forEach((p, i) => probed.set(p, states[i]));
       findings.push({
         check: 'ports',
@@ -601,6 +611,7 @@ export const runDoctor = async (args: Input, opts: DoctorOptions = {}): Promise<
           method: 'POST',
           headers: { 'API-Key': apiKey, 'Content-Type': 'application/json' },
           body: '{}', // invalid on purpose: 400 = key accepted, nothing is created
+          timeoutMs: budget.probeMs,
         })
       : null,
     admin ? getSiteUrl() : null,

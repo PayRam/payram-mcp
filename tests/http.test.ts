@@ -6,7 +6,7 @@ import type { AddressInfo } from 'node:net';
 import { gzipSync } from 'node:zlib';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { configureApp } from '../src/configureApp.js';
+import { configureApp, respondByDeadline } from '../src/configureApp.js';
 
 const ACCEPT = 'application/json, text/event-stream';
 const init = {
@@ -142,6 +142,90 @@ describe('hosted mode', () => {
     const html = await request(app).get('/').set('Accept', 'text/html');
     expect(html.text).toContain('<!DOCTYPE html>');
     expect(html.text).not.toMatch(/create-payee|mcp\/sse|\bTON\b/);
+  });
+});
+
+// Vercel bills a function until its response ends. Every hosted request must end in well under a
+// second; an open stream runs to the platform's kill and is billed the whole time.
+describe('no request holds the function open', () => {
+  const envelope = discover.params._meta;
+  const rpcBody = (res: request.Response) =>
+    res.headers['content-type']?.includes('json')
+      ? res.body
+      : JSON.parse(res.text.split('data: ').pop() ?? '{}');
+
+  it('refuses subscriptions/listen at once instead of holding a stream open', async () => {
+    const started = Date.now();
+    const res = await request(appFor({ PAYRAM_MCP_MODE: 'hosted' }))
+      .post('/mcp')
+      .set('Accept', ACCEPT)
+      .set('MCP-Protocol-Version', '2026-07-28')
+      .set('Mcp-Method', 'subscriptions/listen')
+      .timeout(3_000)
+      .send({
+        jsonrpc: '2.0',
+        id: 'listen:0',
+        method: 'subscriptions/listen',
+        params: { _meta: envelope, notifications: { toolsListChanged: true } },
+      });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(rpcBody(res).error?.message).toMatch(/subscription limit/i);
+  });
+
+  it('never advertises list-change notifications it cannot send', async () => {
+    const app = appFor({ PAYRAM_MCP_MODE: 'hosted' });
+    const legacy = await request(app).post('/mcp').set('Accept', ACCEPT).send(init);
+    const modern = await request(app)
+      .post('/mcp')
+      .set('Accept', ACCEPT)
+      .set('MCP-Protocol-Version', '2026-07-28')
+      .set('Mcp-Method', 'server/discover')
+      .send(discover);
+    for (const caps of [legacy.body.result.capabilities, rpcBody(modern).result.capabilities]) {
+      expect(caps.tools.listChanged).toBe(false);
+      expect(caps.prompts.listChanged).toBe(false);
+      expect(caps.resources.listChanged).toBe(false);
+    }
+  });
+
+  it.each(['2025-06-18', '2025-03-26', '2024-11-05'])(
+    'negotiates initialize with protocolVersion %s',
+    async (version) => {
+      const res = await request(appFor({ PAYRAM_MCP_MODE: 'hosted' }))
+        .post('/mcp')
+        .set('Accept', ACCEPT)
+        .send({ ...init, params: { ...init.params, protocolVersion: version } });
+      expect(res.status).toBe(200);
+      expect(res.body.result.protocolVersion).toBe(version);
+    },
+  );
+
+  it('serves a 2026-style envelope that names a 2025 revision instead of rejecting it', async () => {
+    const res = await request(appFor({ PAYRAM_MCP_MODE: 'hosted' }))
+      .post('/')
+      .set('Accept', ACCEPT)
+      .set('Mcp-Method', 'tools/list')
+      .send({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/list',
+        params: { _meta: { ...envelope, 'io.modelcontextprotocol/protocolVersion': '2025-06-18' } },
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.result.tools.length).toBeGreaterThan(0);
+  });
+
+  it('answers with a JSON-RPC error when a handler stalls past the deadline', async () => {
+    const app = express();
+    app.use(express.json());
+    app.post('/stall', respondByDeadline(50), () => {});
+    const res = await request(app).post('/stall').send({ jsonrpc: '2.0', id: 7, method: 'x' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      jsonrpc: '2.0',
+      error: { code: -32603, message: 'Request timed out after 0.05 s.' },
+      id: 7,
+    });
   });
 });
 

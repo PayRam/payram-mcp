@@ -2,7 +2,11 @@ import express from 'express';
 import path from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { createMcpHandler, isLegacyRequest } from '@modelcontextprotocol/server';
+import {
+  SUPPORTED_PROTOCOL_VERSIONS,
+  createMcpHandler,
+  isLegacyRequest,
+} from '@modelcontextprotocol/server';
 import {
   NodeStreamableHTTPServerTransport,
   toNodeHandler,
@@ -39,6 +43,49 @@ const rpcError = (res: express.Response, status: number, code: number, message: 
 // such as prompts/get arguments, and sits above the tool cap so tool calls keep its readable error.
 const MAX_BODY_SIZE = '256kb';
 const MAX_MESSAGE_ELEMENTS = 2_000;
+
+// Hosted functions are killed at 10 s and billed until then. Every hosted request should finish
+// in well under a second; this is the backstop that answers instead of hanging to the kill.
+export const RESPONSE_DEADLINE_MS = 8_000;
+
+/** 2025-era revisions the legacy path serves (the modern handler serves only 2026-07-28). */
+const LEGACY_VERSIONS: readonly string[] = SUPPORTED_PROTOCOL_VERSIONS;
+
+/**
+ * A 2026-style _meta envelope that names a 2025 revision. The modern handler answers it with
+ * "Unsupported protocol version"; we serve that revision on the legacy path, so serve it there.
+ */
+const envelopeNamesLegacyVersion = (body: unknown): boolean => {
+  const meta = (body as { params?: { _meta?: Record<string, unknown> } } | undefined)?.params
+    ?._meta;
+  const version = meta?.['io.modelcontextprotocol/protocolVersion'];
+  return typeof version === 'string' && LEGACY_VERSIONS.includes(version);
+};
+
+/** Answer with a JSON-RPC error if nothing has finished the response by ms. */
+export const respondByDeadline =
+  (ms: number): express.RequestHandler =>
+  (req, res, next) => {
+    const timer = setTimeout(() => {
+      if (res.writableEnded) return;
+      logger.warn('mcp: response deadline reached', {
+        path: req.path,
+        method: (req.body as { method?: unknown } | undefined)?.method,
+      });
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+      const id = (req.body as { id?: unknown } | undefined)?.id ?? null;
+      res.status(200).json({
+        jsonrpc: '2.0',
+        error: { code: -32603, message: `Request timed out after ${ms / 1000} s.` },
+        id,
+      });
+    }, ms);
+    res.on('close', () => clearTimeout(timer));
+    next();
+  };
 
 /** Array elements + own object members in value, counting no further than max + 1. */
 const countElements = (value: unknown, max: number): number => {
@@ -107,6 +154,10 @@ export const configureApp = (app: express.Express): express.Express => {
   // 2026-07-28 requests: the SDK's stateless modern handler.
   const handler = createMcpHandler(() => createPayramMcpServer(), {
     legacy: 'reject',
+    // No subscriptions/listen streams: a stateless per-request server has nothing to notify
+    // (createServer.ts advertises listChanged: false), and an open stream is billed until the
+    // platform kills it. 0 refuses each listen at once with an in-band error.
+    maxSubscriptions: 0,
     onerror: (error) => logger.warn('mcp: request rejected', { error: error.message }),
   });
   const modern = toNodeHandler(handler);
@@ -178,7 +229,11 @@ export const configureApp = (app: express.Express): express.Express => {
   const serveMcp: express.RequestHandler = (req, res, next) => {
     toWebRequest(req, req.body)
       .then((webRequest) => isLegacyRequest(webRequest, req.body))
-      .then((isLegacy) => (isLegacy ? legacy(req, res) : modern(req, res, req.body)))
+      .then((isLegacy) =>
+        isLegacy || envelopeNamesLegacyVersion(req.body)
+          ? legacy(req, res)
+          : modern(req, res, req.body),
+      )
       .catch(next);
   };
 
@@ -187,6 +242,7 @@ export const configureApp = (app: express.Express): express.Express => {
     app.post(
       route,
       noStore,
+      ...(hosted ? [respondByDeadline(RESPONSE_DEADLINE_MS)] : []),
       captureRequestInfo,
       ...guards,
       jsonParser,

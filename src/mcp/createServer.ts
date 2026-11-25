@@ -42,6 +42,15 @@ export const createPayramMcpServer = (): McpServer => {
     },
     {
       instructions: buildInstructions(),
+      // The catalog is fixed per deployment and every request gets a fresh server, so no change
+      // notification can ever be sent. Saying listChanged: true (the SDK default) invites 2026-era
+      // clients to hold a subscriptions/listen stream open, which on serverless runs until the
+      // platform kills it and is billed the whole time (configureApp.ts refuses those streams).
+      capabilities: {
+        tools: { listChanged: false },
+        prompts: { listChanged: false },
+        resources: { listChanged: false },
+      },
       // Caps array elements + object keys in one tools/call's arguments (GHSA-46jr-4wx8-v453:
       // without it one request can exhaust memory during validation; the SDK leaves it off unless
       // set). The largest legitimate input, search_payments' filter lists, is under 100 elements.
