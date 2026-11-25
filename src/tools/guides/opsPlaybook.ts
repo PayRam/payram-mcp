@@ -95,6 +95,11 @@ export PAYRAM_URL="https://pay.example.com"      # on the PayRam server itself: 
 export PAYRAM_JWT=$(curl -s -X POST "$PAYRAM_URL/api/v1/signin" \\
   -H 'Content-Type: application/json' \\
   -d "{\\"email\\":\\"$PAYRAM_EMAIL\\",\\"password\\":\\"$PAYRAM_PASSWORD\\"}" | jq -r .accessToken)
+#    With two-factor sign-in on, signin answers {"status":"two_factor_required","twoFactorToken":...}
+#    instead of a token. Finish with the code from the authenticator app:
+#      curl -s -X POST "$PAYRAM_URL/api/v1/signin/two-factor" -H 'Content-Type: application/json' \\
+#        -d '{"twoFactorToken":"<from signin>","otpCode":"123456"}' | jq -r .accessToken
+#    or run ./setup_payram_agents.sh signin in a terminal, which asks for the code.
 
 # 3. Project id (most installs have one project)
 curl -s "$PAYRAM_URL/api/v1/external-platform/details" ${H_JWT} | jq '.[] | {id, name}'
@@ -104,7 +109,7 @@ export PROJECT_ID=1
 #    Agent-CLI install: source ~/.payraminfo/merchant-api-key.env  (sets PAYRAM_API_KEY)
 #    Otherwise: dashboard ${DASHBOARD_PAGES.apiKeys}.`,
     interpret: [
-      'A null accessToken means wrong email/password (HTTP 401).',
+      'A null accessToken means wrong email or password (HTTP 401), too many wrong passwords from this network (HTTP 429, wait the minutes it names), or two-factor sign-in is on (status two_factor_required: finish with POST /api/v1/signin/two-factor).',
       AUTH.jwt,
       AUTH.refresh,
       AUTH.apiKey,

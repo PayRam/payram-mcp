@@ -224,7 +224,7 @@ export const SETUP_MODE = {
 
 /** Credential matrix for direct API calls. */
 export const AUTH = {
-  jwt: 'Dashboard login token: POST /api/v1/signin {email,password} → accessToken (short-lived) + refreshToken. Send as `Authorization: Bearer <accessToken>`. Needed for admin, ops and analytics routes.',
+  jwt: 'Dashboard login token: POST /api/v1/signin {email,password} → accessToken (short-lived) + refreshToken. Send as `Authorization: Bearer <accessToken>`. Needed for admin, ops and analytics routes. With two-factor sign-in on, signin answers {status:"two_factor_required", twoFactorToken} instead; POST /api/v1/signin/two-factor {twoFactorToken, otpCode} (or recoveryCode) returns the pair.',
   refresh:
     'POST /api/v1/refresh {refreshToken} → new pair. The refresh token rotates: always store the new one.',
   apiKey:
