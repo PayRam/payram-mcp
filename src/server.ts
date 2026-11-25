@@ -11,13 +11,17 @@ import { getOptionalPayramAccessToken, getOptionalPayramApiKey } from './config/
 import { MCP_SERVER_VERSION } from './generated/buildInfo.js';
 import { logger } from './utils/logger.js';
 
-// Entry point. Vercel detects this file (it imports express and listens). Keep it the only
-// src/app|index|server file: Vercel treats any of them as the entrypoint and requires a default
-// export from it, so a second one takes the whole function down (see tests/entrypoint.test.ts).
+// Entry point. Vercel detects this file and invokes its default export once per request. Keep
+// it the only src/app|index|server file: Vercel treats any of them as the entrypoint and
+// requires a default export from it, so a second one takes the whole function down (see
+// tests/entrypoint.test.ts). On Vercel never call listen(): a listening server makes the runtime
+// treat the function as a long-lived legacy server, and invocations then run until the timeout.
 const app = configureApp(express());
 const port = getServerPort();
 
-if (isHosted()) {
+if (process.env.VERCEL) {
+  // Serverless: the platform drives `app`; nothing to start.
+} else if (isHosted()) {
   app.listen(port, () => {
     logger.info(`PayRam MCP v${MCP_SERVER_VERSION} (hosted) listening on :${port}/mcp`);
   });
@@ -41,3 +45,5 @@ if (isHosted()) {
   httpServer.keepAliveTimeout = 65_000;
   httpServer.headersTimeout = 66_000;
 }
+
+export default app;
